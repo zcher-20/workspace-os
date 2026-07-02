@@ -1,0 +1,25 @@
+# Executive Assistant — agent configuration (read by src/agent.py; secrets in src/.env).
+
+
+# Each agent's model lives in its OWN config (provider prefixes: openai: / anthropic: / google:):
+#   orchestrator -> src/orchestrator/config.yaml
+#   intake/reader/analyst -> src/subagents/<name>/config.yaml
+
+backend:
+  kind: local
+  root_dir: workspace
+  virtual_mode: true
+  execute_timeout: 300
+  inherit_env: true
+
+# --- Subagents
+subagents:
+  - name: intake
+    enabled: true
+  - name: reader
+    enabled: true
+  - name: analyst
+    enabled: true
+
+recursion_limit: 1000
+trace_logs: true

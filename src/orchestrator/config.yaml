@@ -1,0 +1,16 @@
+# Orchestrator
+name: orchestrator
+
+model:                   # provider:model — use `google:` / `anthropic:` / `openai:`
+  name: openai:gpt-5.4-mini
+  use_responses_api: true
+  disable_streaming: false
+
+skills: []
+
+tools:
+  - draft_email
+  - send_email
+
+interrupt_on:
+  - send_email

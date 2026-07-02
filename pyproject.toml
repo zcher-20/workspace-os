@@ -1,0 +1,15 @@
+# Minimal packaging config — just enough to `pip install -e .` so `src` imports cleanly
+# (no sys.path hacks). Runtime dependencies are documented in requirements.yaml and installed
+# into the venv separately.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "executive-assistant"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["src*"]

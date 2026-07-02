@@ -1,0 +1,18 @@
+# Intake subagent — configuration. The final prompt is common_prompt.md + each enabled
+# functionality's .md (in order); tools are the union of the enabled functionalities' TOOLS.
+name: intake
+description: >-
+  Ingest from email: find the Gmail message, download its attachments, and read/extract every
+  document (text + tables; note any charts/images) into work/. ALWAYS run this first to bring
+  email content and attachments into the workspace.
+
+model: google:gemini-3.5-flash   # intake runs on Gemini Flash
+skills: [skills]                 # base skills shared by the functionalities (document extraction)
+
+functionalities:          # order = order in the prompt; flip `enabled` to activate/deactivate
+  - name: email_ingestion
+    enabled: true
+  - name: attachment_handling
+    enabled: true
+  - name: document_extraction
+    enabled: true

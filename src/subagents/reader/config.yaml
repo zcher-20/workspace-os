@@ -1,0 +1,15 @@
+# Reader subagent — configuration. Final prompt = common_prompt.md + each enabled
+# functionality's .md. No email tools (functionalities contribute none), so Reader cannot send.
+name: reader
+description: >-
+  Summarize ONE document and answer questions about it WITH CITATIONS, supporting back-and-forth
+  Q&A on that single source. Use for "summarize / what does this say / ask about this document".
+
+model: google:gemini-3.5-flash   # reader runs on Gemini Flash
+skills: [skills]                 # to read/re-extract and to write deliverables
+
+functionalities:
+  - name: summarization
+    enabled: true
+  - name: cited_qa
+    enabled: true

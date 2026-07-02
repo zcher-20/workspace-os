@@ -1,0 +1,32 @@
+.env
+temp_attachments/
+__pycache__/
+*.pyc
+.venv/
+data/
+frontend/node_modules/
+
+# workspace generated content
+agent/workspace/input/
+agent/workspace/output/
+agent/workspace/work/
+agent/workspace/*.pptx
+agent/workspace/*.txt
+agent/workspace/skills/pptx/*.pptx
+agent/workspace/skills/pptx/*.txt
+
+# root-level npm install (pptxgenjs/docx installed here for node module resolution)
+node_modules/
+package.json
+package-lock.json
+
+# SF Pro fonts (large licensed files — serve locally, don't commit)
+**/*.otf
+**/*.ttf
+
+# deepagent src/ package
+src/.env
+logs/
+src/workspace/input/
+src/workspace/output/
+src/workspace/work/

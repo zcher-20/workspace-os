@@ -1,0 +1,18 @@
+# Analyst subagent
+
+name: analyst
+description: >-
+  Work across MULTIPLE documents: extract facts from each, detect conflicts/contradictions
+  between sources, and draft cited recommendations. Use for "compare / reconcile / what's
+  inconsistent / what should we do".
+
+model: anthropic:claude-sonnet-5   # analyst runs on Sonnet 5
+skills: [skills]
+
+functionalities:
+  - name: fact_extraction
+    enabled: true
+  - name: conflict_detection
+    enabled: true
+  - name: recommendation
+    enabled: true

@@ -1,0 +1,46 @@
+version: "1.0"
+description: "Enterprise Document Agent - Action Permission Matrix"
+
+allowed:
+  - action: read_email_metadata
+    description: "Read email subject, sender, date, and recipient fields"
+  - action: download_attachment
+    description: "Download email attachments to local temp storage"
+  - action: parse_document
+    description: "Parse PDF, Word, or text documents into plaintext"
+  - action: summarize_document
+    description: "Generate a summary of document content using LLM"
+  - action: generate_cited_answer
+    description: "Answer a question about a document with paragraph-level citations"
+  - action: list_emails
+    description: "List emails in inbox matching search criteria"
+  - action: compare_documents
+    description: "Compare two or more documents for conflicts or overlap"
+
+approval_required:
+  - action: draft_email
+    description: "Draft an email response based on document content"
+    approval_message: "The agent has drafted an email. Please review before sending."
+  - action: write_file
+    description: "Write a summary or report to a local file"
+    approval_message: "The agent wants to save a file. Please confirm."
+  - action: send_report
+    description: "Send a generated report to a specified recipient"
+    approval_message: "The agent wants to send a report. Please review the content and recipient."
+  - action: trigger_external_api
+    description: "Call an external API endpoint"
+    approval_message: "The agent wants to call an external API. Please confirm."
+
+forbidden:
+  - action: send_email_auto
+    description: "Send emails without human review"
+    reason: "MVP requires human-in-the-loop for all outbound communication"
+  - action: delete_files
+    description: "Delete any files from the filesystem or cloud storage"
+    reason: "Destructive actions are not permitted in MVP"
+  - action: modify_database
+    description: "Insert, update, or delete database records"
+    reason: "Database writes require a separate approval workflow"
+  - action: change_enterprise_records
+    description: "Modify any enterprise system records (CRM, ERP, HR)"
+    reason: "Enterprise system changes are out of scope for MVP"

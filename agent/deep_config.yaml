@@ -1,0 +1,20 @@
+model:
+  name: openai:gpt-4o
+  use_responses_api: false
+  disable_streaming: false
+
+backend:
+  kind: local
+  root_dir: workspace
+  execute_timeout: 300
+  inherit_env: true
+
+skills:
+  - skills
+
+tools: []
+
+interrupt_on: []
+
+recursion_limit: 1000
+trace_logs: false

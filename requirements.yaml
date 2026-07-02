@@ -1,0 +1,50 @@
+# Python dependencies for the Executive Assistant agent.
+# Install into a venv, e.g.:
+#   python3 -m venv ../cowork_venv
+#   ../cowork_venv/bin/pip install $(python scripts/reqs.py)        # helper expands this file
+# or just pip-install the lists below by hand.
+
+python: ">=3.11"
+
+dependencies:
+  # --- Framework ---
+  - deepagents>=0.6,<0.7
+  - langgraph>=0.2
+  - langchain>=0.3
+  - langchain-core>=0.3
+  - python-dotenv>=1.0
+  - pyyaml>=6.0                  # config.yaml
+
+  # --- Model providers (any of these can be selected via config.yaml model.name) ---
+  - langchain-openai>=0.2        # openai:*           (OPENAI_API_KEY)
+  - langchain-anthropic>=0.2     # anthropic:*        (ANTHROPIC_API_KEY)
+  - langchain-google-genai>=2.0  # google_genai:*     (GOOGLE_API_KEY)
+
+  # --- Document skill runtime deps (docx/pdf/pptx/xlsx scripts) ---
+  - openpyxl>=3.1
+  - pandas>=2.0
+  - pypdf>=4.0
+  - pdfplumber>=0.11
+  - pdf2image>=1.17
+  - reportlab>=4.0
+  - python-docx>=1.1
+  - python-pptx>=1.0
+  - markitdown[all]>=0.0.1
+  - pillow>=10.0
+  - lxml>=5.0
+  - defusedxml>=0.7
+
+optional:
+  # Email (Executive Assistant) — Gmail read/draft/send. Needs Google OAuth (see README).
+  # grpcio is pinned <1.81 because langgraph-api requires it.
+  email:
+    - langchain-google-community[gmail]>=2.0
+    - grpcio<1.81.0
+  # Remote sandbox backend (config backend.kind: e2b)
+  e2b:
+    - langchain-e2b
+    - e2b
+  # Local dev: the in-memory LangGraph server used by `langgraph dev`
+  dev:
+    - langgraph-cli[inmem]>=0.2
+    - pytest>=8.0
