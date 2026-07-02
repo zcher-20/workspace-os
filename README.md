@@ -2,6 +2,11 @@
 
 A full-stack enterprise AI assistant that reads and produces real office documents, manages email, and runs autonomous background tasks — all through a web UI and REST API.
 
+<img width="1440" height="900" alt="Screenshot 2026-07-02 at 1 48 39 AM" src="https://github.com/user-attachments/assets/28f56d2f-a2ac-48b5-9d29-977525b7f646" />
+<img width="1440" height="900" alt="Screenshot 2026-07-02 at 1 48 42 AM" src="https://github.com/user-attachments/assets/1fab0241-e769-4711-b606-9e56664ac74e" />
+
+
+
 ## Overview
 
 AI Workspace is a LangGraph-powered agent system with a FastAPI backend and a React/TypeScript frontend. The agent can work with your email inbox (Gmail or Outlook), parse and generate documents (PDF, Word, Excel, PowerPoint), manage contacts, and run scheduled daily summaries — with a human-in-the-loop gate before any irreversible action like sending an email.
