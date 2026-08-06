@@ -92,6 +92,8 @@ export default function App() {
   const isChat = section === "chat"
   const isArchive = ARCHIVE_SECTIONS.includes(section)
   const isCollection = section === "collection"
+  const isProjects = section === "projects"
+  const isFullBleed = isCollection || isProjects
 
   const pageTitle = section === "summary"
     ? `${greeting()}${userName ? `, ${userName}` : ""}`
@@ -135,8 +137,8 @@ export default function App() {
 
       {/* Main */}
       <main className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Page header — hidden for chat and collection (collection is full-bleed) */}
-        {!isChat && !isCollection && (
+        {/* Page header — hidden for chat, collection, projects (full-bleed sections) */}
+        {!isChat && !isFullBleed && (
           <div className="shrink-0 flex items-start justify-between px-8 pt-10 pb-8">
             <h1 className="text-[22px] font-bold tracking-tight leading-none">{pageTitle}</h1>
             {section === "summary" && (
@@ -150,9 +152,10 @@ export default function App() {
 
         {isChat ? (
           <Chat />
-        ) : isCollection ? (
+        ) : isFullBleed ? (
           <div className="flex flex-1 min-h-0 overflow-hidden">
-            <Collection />
+            {isCollection && <Collection />}
+            {isProjects   && <Projects />}
           </div>
         ) : (
           <ScrollArea className="flex-1">
@@ -164,7 +167,6 @@ export default function App() {
               {section === "people"        && <People />}
               {section === "organizations" && <Organizations />}
               {section === "opportunities" && <Opportunities />}
-              {section === "projects"      && <Projects />}
               {/* EmailInbox stays mounted so it loads once */}
               <div className={section === "email" ? undefined : "hidden"}>
                 <EmailInbox />

@@ -153,22 +153,23 @@ export default function Projects() {
   function onCardDown(e: React.MouseEvent, id: string) {
     e.stopPropagation()
     const pos = positions[id] ?? { x: 0, y: 0 }
+    // offset = clientX - (pan.x + pos.x * zoom)  →  how far the pointer is from card origin in screen space
     dragRef.current = {
       id,
-      ox: e.clientX / zoom - pos.x,
-      oy: e.clientY / zoom - pos.y,
+      ox: e.clientX - pan.x - pos.x * zoom,
+      oy: e.clientY - pan.y - pos.y * zoom,
     }
   }
   function onCanvasMove(e: React.MouseEvent) {
     if (dragRef.current) {
       const { id, ox, oy } = dragRef.current
-      updatePos(id, { x: e.clientX / zoom - ox, y: e.clientY / zoom - oy })
+      // canvas pos = (screenPos - pan - offset) / zoom
+      updatePos(id, { x: (e.clientX - pan.x - ox) / zoom, y: (e.clientY - pan.y - oy) / zoom })
       return
     }
     if (panRef.current) {
-      const dx = (e.clientX - panRef.current.startX) / zoom
-      const dy = (e.clientY - panRef.current.startY) / zoom
-      setPan({ x: panRef.current.panX + dx, y: panRef.current.panY + dy })
+      // pan is in screen pixels directly
+      setPan({ x: panRef.current.panX + (e.clientX - panRef.current.startX), y: panRef.current.panY + (e.clientY - panRef.current.startY) })
     }
   }
   function onCanvasUp() {
@@ -217,7 +218,7 @@ export default function Projects() {
   // ── Canvas view ───────────────────────────────────────────────
   if (view === "canvas") {
     return (
-      <div className="flex flex-col h-full relative -mx-8 -mt-0" style={{ marginTop: "-2.5rem" }}>
+      <div className="flex flex-col h-full w-full relative">
 
         {/* Toolbar */}
         <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5">
@@ -253,7 +254,7 @@ export default function Projects() {
           onMouseUp={onCanvasUp}
           onMouseLeave={onCanvasUp}
         >
-          <div style={{ position: "relative", transform: `translate(${pan.x * zoom}px, ${pan.y * zoom}px) scale(${zoom})`, transformOrigin: "0 0" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "0 0", transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
             {projects.map(p => {
               const pos = positions[p.id]
               if (!pos) return null

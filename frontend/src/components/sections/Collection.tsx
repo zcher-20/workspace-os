@@ -1,12 +1,14 @@
 import { useState, useMemo, useRef } from "react"
 import { Search, Plus, X, Upload, ImageIcon } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import Atlas, { type AtlasItem } from "./Atlas"
 
 const TYPES = ["person", "opportunity", "project", "organization", "event", "idea", "note"] as const
 type ItemType = typeof TYPES[number]
 
-// "Folder" types get an outline border — entity-like items that group other things
-const FOLDER_TYPES: Set<string> = new Set(["person", "organization", "project", "opportunity", "event"])
+// Only org/project/opp/event get the thin-outline folder treatment
+const FOLDER_TYPES: Set<string> = new Set(["organization", "project", "opportunity", "event"])
 
 interface ArchiveItem {
   id: string
@@ -69,7 +71,9 @@ function TextCard({ item, onRemove }: { item: ArchiveItem; onRemove: () => void 
       </button>
 
       {body && (
-        <p className="text-[12px] text-[#1d1d1f] leading-[1.6] mb-2 line-clamp-6 pr-4">{body}</p>
+        <div className="overflow-hidden w-full pr-4 mb-2 prose prose-sm max-w-none [&>*]:text-[12px] [&>*]:text-[#1d1d1f] [&>*]:leading-[1.6] [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>p]:mb-1.5 [&>p]:break-words [&>ul]:pl-3 [&>ol]:pl-3 [&>ul>li]:text-[12px] [&>ol>li]:text-[12px] [&>h1]:text-[13px] [&>h1]:font-semibold [&>h2]:text-[12px] [&>h2]:font-semibold [&>h3]:text-[12px] [&>h3]:font-semibold [&>strong]:font-semibold [&>blockquote]:border-l-2 [&>blockquote]:border-[#c8c8c8] [&>blockquote]:pl-2 [&>blockquote]:text-[#7a7a7a] [&>code]:text-[11px] [&>code]:bg-[#e8e8e4] [&>code]:px-1 [&>pre]:overflow-x-auto [&>pre]:text-[11px]">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+        </div>
       )}
       <p className="text-[10px] text-[#7a7a7a] font-medium leading-snug pr-4">{item.title}</p>
     </div>
@@ -108,8 +112,31 @@ export default function Collection() {
   const [draft, setDraft]       = useState<{
     title: string; subtitle: string; objectType: ItemType; content: string; imageUrl: string
   }>({ title: "", subtitle: "", objectType: "note", content: "", imageUrl: "" })
-  const [dragOver, setDragOver] = useState(false)
+  const [dragOver, setDragOver]       = useState(false)
+  const [draggedId, setDraggedId]     = useState<string | null>(null)
+  const [dragOverId, setDragOverId]   = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function onCardDragStart(e: React.DragEvent, id: string) {
+    setDraggedId(id)
+    e.dataTransfer.effectAllowed = "move"
+  }
+  function onCardDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault()
+    if (id !== draggedId) setDragOverId(id)
+  }
+  function onCardDrop(e: React.DragEvent, targetId: string) {
+    e.preventDefault()
+    if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return }
+    const reordered = [...items]
+    const fromIdx = reordered.findIndex(i => i.id === draggedId)
+    const toIdx   = reordered.findIndex(i => i.id === targetId)
+    const [moved] = reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, moved)
+    setItems(reordered); save(reordered)
+    setDraggedId(null); setDragOverId(null)
+  }
+  function onCardDragEnd() { setDraggedId(null); setDragOverId(null) }
 
   function loadFile(file: File) {
     if (!file.type.startsWith("image/")) return
@@ -206,7 +233,22 @@ export default function Collection() {
               style={{ columns: "2", columnGap: "8px" }}
             >
               {filtered.map(item => (
-                <Card key={item.id} item={item} onRemove={() => removeItem(item.id)} />
+                <div
+                  key={item.id}
+                  draggable
+                  onDragStart={e => onCardDragStart(e, item.id)}
+                  onDragOver={e => onCardDragOver(e, item.id)}
+                  onDrop={e => onCardDrop(e, item.id)}
+                  onDragEnd={onCardDragEnd}
+                  style={{
+                    opacity: draggedId === item.id ? 0.35 : 1,
+                    outline: dragOverId === item.id ? "2px solid #2c4470" : "none",
+                    outlineOffset: "2px",
+                    transition: "opacity 0.15s",
+                  }}
+                >
+                  <Card item={item} onRemove={() => removeItem(item.id)} />
+                </div>
               ))}
             </div>
           )}
