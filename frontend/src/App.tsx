@@ -2,18 +2,23 @@ import { useState, useEffect } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
-import { BarChart2, Mail, FileText, Cpu, Users, MessageSquare, CalendarDays } from "lucide-react"
+import { BarChart2, Mail, FileText, Cpu, Users, MessageSquare, CalendarDays, Archive, UserRound, Building2, Briefcase, FolderOpen } from "lucide-react"
 import Summary from "@/components/sections/Summary"
 import EmailInbox from "@/components/sections/EmailInbox"
 import Documents from "@/components/sections/Documents"
 import Agents from "@/components/sections/Agents"
 import Contacts from "@/components/sections/Contacts"
 import Chat from "@/components/sections/Chat"
+import Collection from "@/components/sections/Collection"
+import People from "@/components/sections/People"
+import Organizations from "@/components/sections/Organizations"
+import Opportunities from "@/components/sections/Opportunities"
+import Projects from "@/components/sections/Projects"
 import RightPanel from "@/components/RightPanel"
 import { CommandPalette } from "@/components/CommandPalette"
 import type { Section } from "@/types"
 
-const NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
+const WORKSPACE_NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "summary",  label: "Summary",      icon: <BarChart2 size={15} /> },
   { id: "chat",     label: "Chat",         icon: <MessageSquare size={15} /> },
   { id: "email",    label: "Email Inbox",  icon: <Mail size={15} /> },
@@ -22,9 +27,47 @@ const NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "contacts", label: "Contacts",     icon: <Users size={15} /> },
 ]
 
+const ARCHIVE_NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
+  { id: "collection",    label: "Collection",    icon: <Archive size={15} /> },
+  { id: "people",        label: "People",        icon: <UserRound size={15} /> },
+  { id: "organizations", label: "Organizations", icon: <Building2 size={15} /> },
+  { id: "opportunities", label: "Opportunities", icon: <Briefcase size={15} /> },
+  { id: "projects",      label: "Projects",      icon: <FolderOpen size={15} /> },
+]
+
+const ARCHIVE_SECTIONS: Section[] = ["collection", "people", "organizations", "opportunities", "projects"]
+
+const PAGE_TITLES: Partial<Record<Section, string>> = {
+  agents:        "AI Agents",
+  email:         "Email Inbox",
+  contacts:      "Contacts",
+  upload:        "Documents",
+  people:        "People",
+  organizations: "Organizations",
+  opportunities: "Opportunities",
+  projects:      "Projects",
+}
+
 function greeting() {
   const h = new Date().getHours()
   return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening"
+}
+
+function NavButton({ id, label, icon, active, onClick }: { id: Section; label: string; icon: React.ReactNode; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-2.5 px-3 py-2 text-[13px] transition-all duration-150 text-left w-full rounded-md",
+        active
+          ? "text-[#2c4470] font-semibold bg-white"
+          : "text-[#7a7a7a] hover:text-[#1d1d1f] hover:bg-white/70"
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  )
 }
 
 export default function App() {
@@ -39,30 +82,39 @@ export default function App() {
   }, [])
 
   const isChat = section === "chat"
+  const isArchive = ARCHIVE_SECTIONS.includes(section)
+  const isCollection = section === "collection"
+
+  const pageTitle = section === "summary"
+    ? `${greeting()}${userName ? `, ${userName}` : ""}`
+    : PAGE_TITLES[section] ?? ""
 
   return (
     <div className="flex h-full">
       <CommandPalette />
+
       {/* Sidebar */}
-      <aside className="flex flex-col w-[220px] shrink-0 border-r pt-4 pb-6 bg-[#f5f5f7]">
+      <aside className="flex flex-col w-[220px] shrink-0 border-r pt-4 pb-6 bg-[#f5f5f7] overflow-y-auto">
         <p className="px-4 pb-4 text-[14px] font-semibold tracking-tight text-[#1d1d1f]">Enterprise Agent</p>
-        <nav className="flex flex-col gap-0.5 flex-1 px-1">
-          {NAV.map(n => (
-            <button
-              key={n.id}
-              onClick={() => setSection(n.id)}
-              className={cn(
-                "flex items-center gap-2.5 px-3 py-2 text-[13px] transition-all duration-150 text-left w-full rounded-md",
-                section === n.id
-                  ? "text-[#2c4470] font-semibold bg-white"
-                  : "text-[#7a7a7a] hover:text-[#1d1d1f] hover:bg-white/70"
-              )}
-            >
-              {n.icon}
-              {n.label}
-            </button>
+
+        {/* Workspace group */}
+        <p className="px-4 pb-1 text-[14px] font-semibold tracking-tight text-[#7a7a7a]">Workspace</p>
+        <nav className="flex flex-col gap-0.5 px-1 mb-3">
+          {WORKSPACE_NAV.map(n => (
+            <NavButton key={n.id} {...n} active={section === n.id} onClick={() => setSection(n.id)} />
           ))}
         </nav>
+
+        <Separator className="mx-3 mb-3" />
+
+        {/* Archive group */}
+        <p className="px-4 pb-1 text-[14px] font-semibold tracking-tight text-[#7a7a7a]">Archive</p>
+        <nav className="flex flex-col gap-0.5 px-1 flex-1">
+          {ARCHIVE_NAV.map(n => (
+            <NavButton key={n.id} {...n} active={section === n.id} onClick={() => setSection(n.id)} />
+          ))}
+        </nav>
+
         <Separator className="mb-4" />
         <button
           onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }))}
@@ -75,51 +127,47 @@ export default function App() {
 
       {/* Main */}
       <main className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {!isChat && section !== "upload" && (() => {
-          if (section === "contacts") return (
-            <div className="px-8 pt-12 pb-10 shrink-0 flex items-center justify-center">
-              <h1 className="text-[22px] font-bold tracking-tight leading-none">Contacts</h1>
-            </div>
-          )
-          const pageTitle =
-            section === "agents"   ? "AI Agents" :
-            section === "email"    ? "Email Inbox" :
-            `${greeting()}${userName ? `, ${userName}` : ""}`
-          return (
-            <div className="flex items-start justify-between px-8 pt-12 pb-10 shrink-0">
-              <h1 className="text-[22px] font-bold tracking-tight leading-none">{pageTitle}</h1>
+        {/* Page header — hidden for chat and collection (collection is full-bleed) */}
+        {!isChat && !isCollection && (
+          <div className="shrink-0 flex items-start justify-between px-8 pt-10 pb-8">
+            <h1 className="text-[22px] font-bold tracking-tight leading-none">{pageTitle}</h1>
+            {section === "summary" && (
               <div className="flex items-center gap-1.5 text-[22px] font-bold tracking-tight leading-none text-[#7a7a7a]">
                 <CalendarDays size={18} strokeWidth={2.5} />
                 {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
               </div>
-            </div>
-          )
-        })()}
-        {!isChat && section === "upload" && (
-          <div className="px-8 pt-12 pb-10 shrink-0 flex items-center justify-center">
-            <h1 className="text-[22px] font-bold tracking-tight leading-none">Document Processor</h1>
+            )}
           </div>
         )}
+
         {isChat ? (
           <Chat />
+        ) : isCollection ? (
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            <Collection />
+          </div>
         ) : (
           <ScrollArea className="flex-1">
             <div className="px-8 pb-16">
-              {section === "summary"  && <Summary />}
-              {section === "contacts" && <Contacts />}
-              {section === "agents"   && <Agents />}
-              {/* EmailInbox stays mounted so it loads once and is instant on re-visit */}
+              {section === "summary"       && <Summary />}
+              {section === "contacts"      && <Contacts />}
+              {section === "agents"        && <Agents />}
+              {section === "upload"        && <Documents />}
+              {section === "people"        && <People />}
+              {section === "organizations" && <Organizations />}
+              {section === "opportunities" && <Opportunities />}
+              {section === "projects"      && <Projects />}
+              {/* EmailInbox stays mounted so it loads once */}
               <div className={section === "email" ? undefined : "hidden"}>
                 <EmailInbox />
               </div>
-              {section === "upload"   && <Documents />}
             </div>
           </ScrollArea>
         )}
       </main>
 
-      {/* Right panel — hidden on Chat page */}
-      {!isChat && <RightPanel onOpenChat={() => setSection("chat")} />}
+      {/* Right panel — hidden on Chat and Archive pages */}
+      {!isChat && !isArchive && <RightPanel onOpenChat={() => setSection("chat")} />}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 export type Section = "summary" | "chat" | "contacts" | "agents" | "email" | "upload"
+  | "collection" | "atlas" | "people" | "organizations" | "opportunities" | "projects"
 
 export interface ChatMessage { role: "user" | "assistant"; content: string }
 
