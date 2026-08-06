@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react"
-import { Search, Plus, X } from "lucide-react"
+import { useState, useMemo, useRef } from "react"
+import { Search, Plus, X, Upload, ImageIcon } from "lucide-react"
 import Atlas, { type AtlasItem } from "./Atlas"
 
 const TYPES = ["person", "opportunity", "project", "organization", "event", "idea", "note"] as const
@@ -108,6 +108,30 @@ export default function Collection() {
   const [draft, setDraft]       = useState<{
     title: string; subtitle: string; objectType: ItemType; content: string; imageUrl: string
   }>({ title: "", subtitle: "", objectType: "note", content: "", imageUrl: "" })
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function loadFile(file: File) {
+    if (!file.type.startsWith("image/")) return
+    const reader = new FileReader()
+    reader.onload = e => {
+      const dataUrl = e.target?.result as string
+      setDraft(d => ({ ...d, imageUrl: dataUrl, title: d.title || file.name.replace(/\.[^.]+$/, "") }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function onFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (f) loadFile(f)
+    e.target.value = ""
+  }
+
+  function onDropZone(e: React.DragEvent) {
+    e.preventDefault(); setDragOver(false)
+    const f = e.dataTransfer.files?.[0]
+    if (f) loadFile(f)
+  }
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -221,15 +245,50 @@ export default function Collection() {
                 </select>
               </div>
 
-              {/* Image URL */}
+              {/* Image — upload or URL */}
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-[#a0a0a0]">Image URL</label>
-                <input
-                  value={draft.imageUrl}
-                  onChange={e => setDraft(d => ({ ...d, imageUrl: e.target.value }))}
-                  placeholder="https://…"
-                  className="mt-1 w-full px-3 py-2 text-[12px] border border-[#e0e0e0] focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30"
-                />
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[#a0a0a0]">Image</label>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileInput} />
+
+                {draft.imageUrl ? (
+                  /* Preview */
+                  <div className="mt-1 relative">
+                    <img src={draft.imageUrl} alt="" className="w-full max-h-40 object-cover block" />
+                    <button
+                      onClick={() => setDraft(d => ({ ...d, imageUrl: "" }))}
+                      className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center bg-black/50 text-white"
+                    >
+                      <X size={9} />
+                    </button>
+                  </div>
+                ) : (
+                  /* Drop zone */
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={onDropZone}
+                    className={`mt-1 flex flex-col items-center justify-center gap-1.5 py-5 border cursor-pointer transition-colors ${
+                      dragOver ? "border-[#2c4470] bg-[#f0f4fc]" : "border-dashed border-[#d0d0d0] hover:border-[#2c4470]/50 hover:bg-[#fafafa]"
+                    }`}
+                  >
+                    <Upload size={16} className="text-[#b0b0b0]" />
+                    <span className="text-[11px] text-[#7a7a7a]">Drop image or <span className="underline">browse</span></span>
+                  </div>
+                )}
+
+                {/* URL fallback */}
+                {!draft.imageUrl && (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <ImageIcon size={11} className="text-[#b0b0b0] shrink-0" />
+                    <input
+                      value={draft.imageUrl}
+                      onChange={e => setDraft(d => ({ ...d, imageUrl: e.target.value }))}
+                      placeholder="or paste image URL…"
+                      className="flex-1 px-2 py-1 text-[11px] border border-[#e8e8e8] focus:outline-none focus:border-[#2c4470]/40 bg-transparent"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Title */}

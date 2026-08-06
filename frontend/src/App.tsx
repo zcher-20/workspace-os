@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
-import { BarChart2, Mail, FileText, Cpu, Users, MessageSquare, CalendarDays, Archive, UserRound, Building2, Briefcase, FolderOpen } from "lucide-react"
+import { BarChart2, Mail, FileText, Cpu, MessageSquare, CalendarDays, Archive, UserRound, Building2, Briefcase, FolderOpen } from "lucide-react"
 import Summary from "@/components/sections/Summary"
 import EmailInbox from "@/components/sections/EmailInbox"
 import Documents from "@/components/sections/Documents"
@@ -24,7 +24,6 @@ const WORKSPACE_NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "email",    label: "Email Inbox",  icon: <Mail size={15} /> },
   { id: "agents",   label: "Agents",       icon: <Cpu size={15} /> },
   { id: "upload",   label: "Documents",    icon: <FileText size={15} /> },
-  { id: "contacts", label: "Contacts",     icon: <Users size={15} /> },
 ]
 
 const ARCHIVE_NAV: { id: Section; label: string; icon: React.ReactNode }[] = [

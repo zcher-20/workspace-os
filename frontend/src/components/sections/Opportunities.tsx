@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { Plus, X, ChevronRight, Clock, Search } from "lucide-react"
+import { Plus, X, Clock, Search, ExternalLink } from "lucide-react"
 
 type Status = "Exploring" | "Applying" | "Interview" | "Offer" | "Archived"
 const COLUMNS: Status[] = ["Exploring", "Applying", "Interview", "Offer", "Archived"]
@@ -19,6 +19,7 @@ interface Opportunity {
   deadline: string
   status: Status
   notes: string
+  link: string
   createdAt: string
 }
 
@@ -30,19 +31,15 @@ function formatDate(iso: string) {
   if (!iso) return ""
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
+function isOverdue(deadline: string) { return deadline && new Date(deadline) < new Date() }
 
-function isOverdue(deadline: string) {
-  return deadline && new Date(deadline) < new Date()
-}
-
-const EMPTY = { title: "", organization: "", deadline: "", status: "Exploring" as Status, notes: "" }
+const EMPTY = { title: "", organization: "", deadline: "", status: "Exploring" as Status, notes: "", link: "" }
 
 export default function Opportunities() {
-  const [items, setItems] = useState<Opportunity[]>(load)
+  const [items, setItems]   = useState<Opportunity[]>(load)
   const [search, setSearch] = useState("")
-  const [view, setView] = useState<"kanban" | "list">("kanban")
   const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState(EMPTY)
+  const [draft, setDraft]   = useState(EMPTY)
   const [selected, setSelected] = useState<Opportunity | null>(null)
 
   function mutate(updated: Opportunity[]) { setItems(updated); save(updated) }
@@ -75,8 +72,9 @@ export default function Opportunities() {
     return m
   }, [filtered])
 
+  const selectedItem = selected ? items.find(i => i.id === selected.id) ?? null : null
+
   function OppCard({ opp }: { opp: Opportunity }) {
-    const s = STATUS_STYLES[opp.status]
     const overdue = isOverdue(opp.deadline)
     return (
       <div
@@ -85,22 +83,33 @@ export default function Opportunities() {
       >
         <div className="flex items-start justify-between mb-2">
           <p className="text-[13px] font-semibold text-[#1d1d1f] line-clamp-2 flex-1 pr-2">{opp.title}</p>
-          <button onClick={e => { e.stopPropagation(); removeItem(opp.id) }} className="opacity-0 group-hover:opacity-100 shrink-0">
-            <X size={12} className="text-[#7a7a7a] hover:text-[#1d1d1f]" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100">
+            {opp.link && (
+              <a href={opp.link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                className="p-0.5 text-[#7a7a7a] hover:text-[#2c4470] transition-colors">
+                <ExternalLink size={11} />
+              </a>
+            )}
+            <button onClick={e => { e.stopPropagation(); removeItem(opp.id) }}>
+              <X size={11} className="text-[#7a7a7a] hover:text-[#1d1d1f]" />
+            </button>
+          </div>
         </div>
         {opp.organization && <p className="text-[11px] text-[#7a7a7a] mb-2">{opp.organization}</p>}
-        {opp.deadline && (
-          <div className={`flex items-center gap-1 text-[11px] ${overdue ? "text-[#92400e]" : "text-[#7a7a7a]"}`}>
-            <Clock size={10} />
-            {overdue ? "Overdue · " : ""}{formatDate(opp.deadline)}
-          </div>
-        )}
+        <div className="flex items-center justify-between">
+          {opp.deadline && (
+            <div className={`flex items-center gap-1 text-[11px] ${overdue ? "text-[#92400e]" : "text-[#7a7a7a]"}`}>
+              <Clock size={9} />
+              {overdue ? "Overdue · " : ""}{formatDate(opp.deadline)}
+            </div>
+          )}
+          {opp.link && (
+            <ExternalLink size={9} className="text-[#c0c0c0] ml-auto" />
+          )}
+        </div>
       </div>
     )
   }
-
-  const selectedItem = selected ? items.find(i => i.id === selected.id) ?? null : null
 
   return (
     <div className="flex flex-col h-full">
@@ -108,14 +117,8 @@ export default function Opportunities() {
       <div className="flex items-center gap-3 mb-5">
         <div className="relative flex-1 max-w-xs">
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#7a7a7a]" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search opportunities…" className="w-full pl-7 pr-3 py-1.5 text-[12px] rounded-md border border-[#e0e0e0] bg-white focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
-        </div>
-        <div className="flex gap-0.5 bg-[#f0f0f0] rounded-lg p-0.5">
-          {(["kanban", "list"] as const).map(v => (
-            <button key={v} onClick={() => setView(v)} className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${view === v ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#7a7a7a]"}`}>
-              {v.charAt(0).toUpperCase() + v.slice(1)}
-            </button>
-          ))}
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search opportunities…"
+            className="w-full pl-7 pr-3 py-1.5 text-[12px] rounded-md border border-[#e0e0e0] bg-white focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
         </div>
         <button onClick={() => setAdding(true)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium rounded-md bg-[#1d1d1f] text-white hover:bg-[#2d2d2f] transition-colors">
           <Plus size={13} /> Add
@@ -123,13 +126,13 @@ export default function Opportunities() {
       </div>
 
       <div className="flex gap-4 flex-1 min-h-0">
-        {/* Kanban / List */}
-        <div className={`flex-1 overflow-auto ${view === "kanban" ? "flex gap-3" : "flex flex-col gap-2"}`}>
-          {view === "kanban" ? COLUMNS.filter(c => c !== "Archived").map(col => (
+        {/* Kanban */}
+        <div className="flex gap-3 flex-1 overflow-auto">
+          {COLUMNS.filter(c => c !== "Archived").map(col => (
             <div key={col} className="flex flex-col gap-2 w-52 shrink-0">
               <div className="flex items-center gap-2 mb-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${STATUS_STYLES[col].dot}`} />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#7a7a7a]">{col}</span>
+                <span className="text-[14px] font-semibold tracking-tight text-[#7a7a7a]">{col}</span>
                 <span className="ml-auto text-[10px] text-[#c0c0c0]">{byStatus[col].length}</span>
               </div>
               <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
@@ -139,21 +142,7 @@ export default function Opportunities() {
                 )}
               </div>
             </div>
-          )) : filtered.map(opp => {
-            const s = STATUS_STYLES[opp.status]
-            return (
-              <div key={opp.id} className="group flex items-center gap-4 px-4 py-3 rounded-xl border border-[#e0e0e0] bg-white hover:border-[#2c4470]/30 transition-colors cursor-pointer" onClick={() => setSelected(opp)}>
-                <div className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-[#1d1d1f] truncate">{opp.title}</p>
-                  {opp.organization && <p className="text-[11px] text-[#7a7a7a] truncate">{opp.organization}</p>}
-                </div>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.bg} ${s.text}`}>{opp.status}</span>
-                {opp.deadline && <span className={`text-[11px] shrink-0 ${isOverdue(opp.deadline) ? "text-[#92400e]" : "text-[#7a7a7a]"}`}>{formatDate(opp.deadline)}</span>}
-                <ChevronRight size={12} className="text-[#c0c0c0] shrink-0" />
-              </div>
-            )
-          })}
+          ))}
         </div>
 
         {/* Detail panel */}
@@ -163,22 +152,32 @@ export default function Opportunities() {
               <h3 className="text-[14px] font-semibold text-[#1d1d1f] leading-snug flex-1 pr-2">{selectedItem.title}</h3>
               <button onClick={() => setSelected(null)}><X size={14} className="text-[#7a7a7a]" /></button>
             </div>
+
             {selectedItem.organization && <p className="text-[12px] text-[#7a7a7a] -mt-2">{selectedItem.organization}</p>}
+
+            {/* Link */}
+            {selectedItem.link && (
+              <a href={selectedItem.link} target="_blank" rel="noreferrer"
+                className="flex items-center gap-1.5 text-[12px] text-[#2c4470] hover:underline truncate">
+                <ExternalLink size={11} />
+                <span className="truncate">{selectedItem.link.replace(/^https?:\/\//, "")}</span>
+              </a>
+            )}
+
+            {/* Status */}
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-[#7a7a7a] mb-2">Status</p>
               <div className="flex flex-col gap-1">
                 {COLUMNS.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => updateStatus(selectedItem.id, s)}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] transition-colors ${selectedItem.status === s ? `${STATUS_STYLES[s].bg} ${STATUS_STYLES[s].text} font-semibold` : "hover:bg-[#f5f5f7] text-[#7a7a7a]"}`}
-                  >
+                  <button key={s} onClick={() => updateStatus(selectedItem.id, s)}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] transition-colors ${selectedItem.status === s ? `${STATUS_STYLES[s].bg} ${STATUS_STYLES[s].text} font-semibold` : "hover:bg-[#f5f5f7] text-[#7a7a7a]"}`}>
                     <div className={`w-1.5 h-1.5 rounded-full ${STATUS_STYLES[s].dot}`} />
                     {s}
                   </button>
                 ))}
               </div>
             </div>
+
             {selectedItem.deadline && (
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[#7a7a7a] mb-1">Deadline</p>
@@ -187,13 +186,17 @@ export default function Opportunities() {
                 </p>
               </div>
             )}
+
             {selectedItem.notes && (
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[#7a7a7a] mb-1">Notes</p>
-                <p className="text-[12px] text-[#1d1d1f]">{selectedItem.notes}</p>
+                <p className="text-[12px] text-[#1d1d1f] leading-relaxed">{selectedItem.notes}</p>
               </div>
             )}
-            <button onClick={() => removeItem(selectedItem.id)} className="mt-auto text-[11px] text-[#7a7a7a] hover:text-red-600 transition-colors text-left">Delete opportunity</button>
+
+            <button onClick={() => removeItem(selectedItem.id)} className="mt-auto text-[11px] text-[#7a7a7a] hover:text-red-600 transition-colors text-left">
+              Delete opportunity
+            </button>
           </div>
         )}
       </div>
@@ -209,27 +212,44 @@ export default function Opportunities() {
             <div className="flex flex-col gap-3">
               <div>
                 <label className="text-[11px] font-medium text-[#7a7a7a] uppercase tracking-wider">Title</label>
-                <input autoFocus value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} placeholder="Role or opportunity name" className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
+                <input autoFocus value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                  onKeyDown={e => e.key === "Enter" && addItem()} placeholder="Role or opportunity name"
+                  className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-[#7a7a7a] uppercase tracking-wider">Organization</label>
-                <input value={draft.organization} onChange={e => setDraft(d => ({ ...d, organization: e.target.value }))} placeholder="Company or institution" className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
+                <input value={draft.organization} onChange={e => setDraft(d => ({ ...d, organization: e.target.value }))}
+                  placeholder="Company or institution"
+                  className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-[#7a7a7a] uppercase tracking-wider">Link</label>
+                <input value={draft.link} onChange={e => setDraft(d => ({ ...d, link: e.target.value }))}
+                  placeholder="https://…"
+                  className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-[#7a7a7a] uppercase tracking-wider">Deadline</label>
-                <input type="date" value={draft.deadline} onChange={e => setDraft(d => ({ ...d, deadline: e.target.value }))} className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] focus:outline-none" />
+                <input type="date" value={draft.deadline} onChange={e => setDraft(d => ({ ...d, deadline: e.target.value }))}
+                  className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] focus:outline-none" />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-[#7a7a7a] uppercase tracking-wider">Status</label>
-                <select value={draft.status} onChange={e => setDraft(d => ({ ...d, status: e.target.value as Status }))} className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] bg-white focus:outline-none">
+                <select value={draft.status} onChange={e => setDraft(d => ({ ...d, status: e.target.value as Status }))}
+                  className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] bg-white focus:outline-none">
                   {COLUMNS.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-[11px] font-medium text-[#7a7a7a] uppercase tracking-wider">Notes</label>
-                <textarea value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))} rows={2} placeholder="Any notes…" className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] focus:outline-none resize-none" />
+                <textarea value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
+                  rows={2} placeholder="Any notes…"
+                  className="mt-1 w-full px-3 py-1.5 text-[13px] rounded-md border border-[#e0e0e0] focus:outline-none resize-none" />
               </div>
-              <button onClick={addItem} disabled={!draft.title.trim()} className="mt-1 py-2 rounded-lg bg-[#1d1d1f] text-white text-[13px] font-medium hover:bg-[#2d2d2f] disabled:opacity-40 transition-colors">Add</button>
+              <button onClick={addItem} disabled={!draft.title.trim()}
+                className="mt-1 py-2 rounded-lg bg-[#1d1d1f] text-white text-[13px] font-medium hover:bg-[#2d2d2f] disabled:opacity-40 transition-colors">
+                Add
+              </button>
             </div>
           </div>
         </div>

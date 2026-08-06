@@ -113,6 +113,8 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
   const [hovered, setHovered]           = useState<string | null>(null)
   const [hoverCard, setHoverCard]       = useState<HoverCard | null>(null)
   const [dragging, setDragging]         = useState<{ id: string; ox: number; oy: number } | null>(null)
+  const [isPanning, setIsPanning]       = useState(false)
+  const panning = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
 
   const svgRef       = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -183,7 +185,7 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
     })
   }
 
-  // Drag
+  // Node drag
   function onNodeDown(e: React.MouseEvent, id: string) {
     e.stopPropagation()
     if (!svgRef.current) return
@@ -192,12 +194,32 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
     setDragging({ id, ox: (e.clientX - rect.left) / zoom - pan.x - n.x, oy: (e.clientY - rect.top) / zoom - pan.y - n.y })
   }
 
+  // Canvas pan start (background click)
+  function onCanvasDown(e: React.MouseEvent) {
+    if (dragging) return
+    panning.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y }
+    setIsPanning(true)
+  }
+
   function onSvgMove(e: React.MouseEvent) {
-    if (!dragging || !svgRef.current) return
-    const rect = svgRef.current.getBoundingClientRect()
-    const x = (e.clientX - rect.left) / zoom - pan.x - dragging.ox
-    const y = (e.clientY - rect.top) / zoom - pan.y - dragging.oy
-    setNodes(ns => ns.map(n => n.id === dragging.id ? { ...n, x, y, vx: 0, vy: 0 } : n))
+    if (dragging && svgRef.current) {
+      const rect = svgRef.current.getBoundingClientRect()
+      const x = (e.clientX - rect.left) / zoom - pan.x - dragging.ox
+      const y = (e.clientY - rect.top) / zoom - pan.y - dragging.oy
+      setNodes(ns => ns.map(n => n.id === dragging.id ? { ...n, x, y, vx: 0, vy: 0 } : n))
+      return
+    }
+    if (panning.current) {
+      const dx = (e.clientX - panning.current.startX) / zoom
+      const dy = (e.clientY - panning.current.startY) / zoom
+      setPan({ x: panning.current.panX + dx, y: panning.current.panY + dy })
+    }
+  }
+
+  function onSvgUp() {
+    setDragging(null)
+    panning.current = null
+    setIsPanning(false)
   }
 
   // Hover card
@@ -282,10 +304,12 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
       <div ref={containerRef} className="flex-1 relative overflow-hidden" onClick={() => setFiltersOpen(false)}>
         <svg
           ref={svgRef}
-          className="w-full h-full bg-white cursor-default select-none"
+          className="w-full h-full bg-white select-none"
+          style={{ cursor: isPanning || dragging ? "grabbing" : "grab" }}
+          onMouseDown={onCanvasDown}
           onMouseMove={onSvgMove}
-          onMouseUp={() => setDragging(null)}
-          onMouseLeave={() => { setDragging(null); scheduleHide() }}
+          onMouseUp={onSvgUp}
+          onMouseLeave={() => { onSvgUp(); scheduleHide() }}
         >
           <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
 
