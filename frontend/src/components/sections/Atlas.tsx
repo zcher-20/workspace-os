@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react"
-import { ZoomIn, ZoomOut, Maximize2, Search } from "lucide-react"
+import { ZoomIn, ZoomOut, Maximize2, Search, ArrowRight } from "lucide-react"
 
 const TYPE_COLORS: Record<string, string> = {
   person:       "#4f7ab3",
@@ -11,9 +11,30 @@ const TYPE_COLORS: Record<string, string> = {
   note:         "#7a7a7a",
 }
 
+// Which section each type navigates to (null = no dedicated page)
+const TYPE_SECTION: Record<string, string | null> = {
+  person:       "people",
+  opportunity:  "opportunities",
+  project:      "projects",
+  idea:         "projects",
+  organization: "organizations",
+  event:        "organizations",
+  note:         null,
+}
+
+const TYPE_SECTION_LABEL: Record<string, string> = {
+  person:       "People",
+  opportunity:  "Opportunities",
+  project:      "Projects",
+  idea:         "Projects",
+  organization: "Organizations",
+  event:        "Organizations",
+}
+
 interface Node {
   id: string
   label: string
+  subtitle: string
   type: string
   x: number
   y: number
@@ -24,12 +45,12 @@ interface Node {
 interface Edge {
   source: string
   target: string
-  label: string
 }
 
 export interface AtlasItem {
   id: string
   title: string
+  subtitle?: string
   objectType: string
 }
 
@@ -41,6 +62,7 @@ function buildGraph(items: AtlasItem[]) {
     return {
       id: item.id,
       label: item.title,
+      subtitle: item.subtitle || "",
       type: item.objectType,
       x: cx + radius * Math.cos(angle) + (Math.random() - 0.5) * 60,
       y: cy + radius * Math.sin(angle) + (Math.random() - 0.5) * 60,
@@ -50,11 +72,10 @@ function buildGraph(items: AtlasItem[]) {
   const edges: Edge[] = []
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
-      if (nodes[i].type === nodes[j].type && Math.random() < 0.3) {
-        edges.push({ source: nodes[i].id, target: nodes[j].id, label: "related" })
-      } else if (Math.random() < 0.08) {
-        edges.push({ source: nodes[i].id, target: nodes[j].id, label: "linked" })
-      }
+      if (nodes[i].type === nodes[j].type && Math.random() < 0.3)
+        edges.push({ source: nodes[i].id, target: nodes[j].id })
+      else if (Math.random() < 0.08)
+        edges.push({ source: nodes[i].id, target: nodes[j].id })
     }
   }
   return { nodes, edges }
@@ -62,6 +83,12 @@ function buildGraph(items: AtlasItem[]) {
 
 interface AtlasProps {
   items: AtlasItem[]
+}
+
+interface HoverCard {
+  node: Node
+  screenX: number
+  screenY: number
 }
 
 export default function Atlas({ items }: AtlasProps) {
@@ -73,18 +100,18 @@ export default function Atlas({ items }: AtlasProps) {
   const [search, setSearch] = useState("")
   const [selectedType, setSelectedType] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
+  const [hoverCard, setHoverCard] = useState<HoverCard | null>(null)
   const [dragging, setDragging] = useState<{ id: string; ox: number; oy: number } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const animRef = useRef<number>()
+  const hideTimer = useRef<ReturnType<typeof setTimeout>>()
 
-  // Re-sync nodes when items change
   useEffect(() => {
-    const { nodes: fresh, edges: freshEdges } = buildGraph(items)
+    const { nodes: fresh } = buildGraph(items)
     setNodes(fresh)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.length])
 
-  // Force simulation
   useEffect(() => {
     if (nodes.length === 0) return
     let localNodes = nodes.map(n => ({ ...n }))
@@ -133,6 +160,8 @@ export default function Atlas({ items }: AtlasProps) {
       .map(n => n.id))
   }, [nodes, search, selectedType])
 
+  const nodeMap = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes])
+
   function handleNodeMouseDown(e: React.MouseEvent, id: string) {
     e.stopPropagation()
     if (!svgRef.current) return
@@ -141,15 +170,34 @@ export default function Atlas({ items }: AtlasProps) {
     setDragging({ id, ox: (e.clientX - rect.left) / zoom - pan.x - node.x, oy: (e.clientY - rect.top) / zoom - pan.y - node.y })
   }
 
-  function handleMouseMove(e: React.MouseEvent) {
-    if (!dragging || !svgRef.current) return
-    const rect = svgRef.current.getBoundingClientRect()
-    const x = (e.clientX - rect.left) / zoom - pan.x - dragging.ox
-    const y = (e.clientY - rect.top) / zoom - pan.y - dragging.oy
-    setNodes(ns => ns.map(n => n.id === dragging.id ? { ...n, x, y, vx: 0, vy: 0 } : n))
+  function handleSvgMouseMove(e: React.MouseEvent) {
+    if (dragging && svgRef.current) {
+      const rect = svgRef.current.getBoundingClientRect()
+      const x = (e.clientX - rect.left) / zoom - pan.x - dragging.ox
+      const y = (e.clientY - rect.top) / zoom - pan.y - dragging.oy
+      setNodes(ns => ns.map(n => n.id === dragging.id ? { ...n, x, y, vx: 0, vy: 0 } : n))
+    }
   }
 
-  const nodeMap = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes])
+  function showCard(node: Node, e: React.MouseEvent) {
+    clearTimeout(hideTimer.current)
+    if (!containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    setHoverCard({ node, screenX: e.clientX - rect.left, screenY: e.clientY - rect.top })
+  }
+
+  function scheduleHide() {
+    hideTimer.current = setTimeout(() => setHoverCard(null), 120)
+  }
+
+  function cancelHide() {
+    clearTimeout(hideTimer.current)
+  }
+
+  function navigateTo(section: string) {
+    window.dispatchEvent(new CustomEvent("workspace:navigate", { detail: section }))
+    setHoverCard(null)
+  }
 
   if (items.length === 0) {
     return (
@@ -195,47 +243,103 @@ export default function Atlas({ items }: AtlasProps) {
         </div>
       </div>
 
-      {/* Graph */}
-      <svg
-        ref={svgRef}
-        className="flex-1 bg-[#fafafa] cursor-default select-none"
-        onMouseMove={handleMouseMove}
-        onMouseUp={() => setDragging(null)}
-        onMouseLeave={() => setDragging(null)}
-      >
-        <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
-          {edges.map((e, i) => {
-            const s = nodeMap[e.source], t = nodeMap[e.target]
-            if (!s || !t) return null
-            const sVis = visibleIds.has(s.id), tVis = visibleIds.has(t.id)
-            if (!sVis && !tVis) return null
-            return <line key={i} x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke="#e0e0e0" strokeWidth={1 / zoom} opacity={sVis && tVis ? 0.8 : 0.2} />
-          })}
-          {nodes.map(n => {
-            const visible = visibleIds.has(n.id)
-            const color = TYPE_COLORS[n.type] || "#7a7a7a"
-            const isHovered = hovered === n.id
-            return (
-              <g key={n.id} transform={`translate(${n.x},${n.y})`} style={{ opacity: visible ? 1 : 0.12 }}>
-                <circle
-                  r={isHovered ? 9 : 6}
-                  fill={color} fillOpacity={0.15}
-                  stroke={color} strokeWidth={isHovered ? 2 : 1.5}
-                  className="cursor-grab active:cursor-grabbing transition-all"
-                  onMouseEnter={() => setHovered(n.id)}
-                  onMouseLeave={() => setHovered(null)}
-                  onMouseDown={e => handleNodeMouseDown(e, n.id)}
-                />
-                {(isHovered || zoom > 1.4) && (
-                  <text y={-11} textAnchor="middle" fontSize={9 / zoom} fill="#1d1d1f" className="pointer-events-none">
-                    {n.label.length > 18 ? n.label.slice(0, 16) + "…" : n.label}
-                  </text>
-                )}
-              </g>
-            )
-          })}
-        </g>
-      </svg>
+      {/* Graph + hover card container */}
+      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+        <svg
+          ref={svgRef}
+          className="w-full h-full bg-[#fafafa] cursor-default select-none"
+          onMouseMove={handleSvgMouseMove}
+          onMouseUp={() => setDragging(null)}
+          onMouseLeave={() => { setDragging(null); scheduleHide() }}
+        >
+          <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+            {edges.map((e, i) => {
+              const s = nodeMap[e.source], t = nodeMap[e.target]
+              if (!s || !t) return null
+              const sVis = visibleIds.has(s.id), tVis = visibleIds.has(t.id)
+              if (!sVis && !tVis) return null
+              return <line key={i} x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke="#e0e0e0" strokeWidth={1 / zoom} opacity={sVis && tVis ? 0.8 : 0.2} />
+            })}
+            {nodes.map(n => {
+              const visible = visibleIds.has(n.id)
+              const color = TYPE_COLORS[n.type] || "#7a7a7a"
+              const isHovered = hovered === n.id
+              return (
+                <g key={n.id} transform={`translate(${n.x},${n.y})`} style={{ opacity: visible ? 1 : 0.12 }}>
+                  <circle
+                    r={isHovered ? 10 : 6}
+                    fill={color} fillOpacity={isHovered ? 0.25 : 0.15}
+                    stroke={color} strokeWidth={isHovered ? 2.5 : 1.5}
+                    className="cursor-pointer transition-all"
+                    onMouseEnter={e => { setHovered(n.id); showCard(n, e) }}
+                    onMouseLeave={() => { setHovered(null); scheduleHide() }}
+                    onMouseDown={e => handleNodeMouseDown(e, n.id)}
+                  />
+                  {zoom > 1.4 && !isHovered && (
+                    <text y={-11} textAnchor="middle" fontSize={9 / zoom} fill="#7a7a7a" className="pointer-events-none">
+                      {n.label.length > 16 ? n.label.slice(0, 14) + "…" : n.label}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+          </g>
+        </svg>
+
+        {/* Hover card */}
+        {hoverCard && (() => {
+          const { node, screenX, screenY } = hoverCard
+          const color = TYPE_COLORS[node.type] || "#7a7a7a"
+          const targetSection = TYPE_SECTION[node.type]
+          const targetLabel = TYPE_SECTION_LABEL[node.type]
+
+          // Position: prefer above-right, clamp so it doesn't go off-edge
+          const cardW = 200, cardH = 90
+          const left = Math.min(screenX + 14, (containerRef.current?.clientWidth ?? 600) - cardW - 8)
+          const top = Math.max(8, screenY - cardH - 10)
+
+          return (
+            <div
+              className="absolute z-20 pointer-events-auto"
+              style={{ left, top, width: cardW }}
+              onMouseEnter={cancelHide}
+              onMouseLeave={scheduleHide}
+            >
+              <div className="bg-white rounded-xl border border-[#e0e0e0] shadow-lg overflow-hidden">
+                {/* Colour stripe */}
+                <div className="h-1" style={{ background: color }} />
+                <div className="px-3 py-2.5">
+                  {/* Type badge */}
+                  <span
+                    className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider mb-1.5"
+                    style={{ background: color + "1a", color }}
+                  >
+                    {node.type}
+                  </span>
+                  {/* Title */}
+                  <p className="text-[12px] font-semibold text-[#1d1d1f] leading-snug line-clamp-2">
+                    {node.label}
+                  </p>
+                  {/* Subtitle */}
+                  {node.subtitle && (
+                    <p className="text-[11px] text-[#7a7a7a] mt-0.5 line-clamp-1">{node.subtitle}</p>
+                  )}
+                  {/* Navigate link */}
+                  {targetSection && (
+                    <button
+                      onClick={() => navigateTo(targetSection)}
+                      className="mt-2 flex items-center gap-1 text-[10px] font-semibold hover:underline"
+                      style={{ color }}
+                    >
+                      View in {targetLabel} <ArrowRight size={10} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+      </div>
 
       {/* Legend */}
       <div className="flex items-center gap-3 px-3 py-1.5 border-t border-[#e0e0e0] bg-white shrink-0">

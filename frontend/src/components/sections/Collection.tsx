@@ -53,7 +53,7 @@ export default function Collection() {
   }), [items, search, selectedType])
 
   const atlasItems: AtlasItem[] = useMemo(() => items.map(i => ({
-    id: i.id, title: i.title, objectType: i.objectType,
+    id: i.id, title: i.title, subtitle: i.subtitle, objectType: i.objectType,
   })), [items])
 
   function addItem() {

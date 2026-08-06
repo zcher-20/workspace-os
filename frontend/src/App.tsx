@@ -81,6 +81,15 @@ export default function App() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    function onNavigate(e: Event) {
+      const target = (e as CustomEvent<string>).detail as Section
+      if (target) setSection(target)
+    }
+    window.addEventListener("workspace:navigate", onNavigate)
+    return () => window.removeEventListener("workspace:navigate", onNavigate)
+  }, [])
+
   const isChat = section === "chat"
   const isArchive = ARCHIVE_SECTIONS.includes(section)
   const isCollection = section === "collection"
