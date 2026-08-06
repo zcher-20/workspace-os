@@ -1,8 +1,13 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef } from "react"
 import { Plus, X, Clock, Search, ExternalLink } from "lucide-react"
 
 type Status = "Exploring" | "Applying" | "Interview" | "Offer" | "Archived"
 const COLUMNS: Status[] = ["Exploring", "Applying", "Interview", "Offer", "Archived"]
+
+const LS_NAMES = "workspace:column-names"
+const DEFAULT_NAMES: Record<Status, string> = { Exploring: "Exploring", Applying: "Applying", Interview: "Interview", Offer: "Offer", Archived: "Archived" }
+function loadNames(): Record<Status, string> { try { return { ...DEFAULT_NAMES, ...JSON.parse(localStorage.getItem(LS_NAMES) || "{}") } } catch { return { ...DEFAULT_NAMES } } }
+function saveNames(n: Record<Status, string>) { localStorage.setItem(LS_NAMES, JSON.stringify(n)) }
 
 const STATUS_STYLES: Record<Status, { bg: string; text: string; dot: string }> = {
   Exploring: { bg: "bg-[#f0f0f0]",   text: "text-[#7a7a7a]",   dot: "bg-[#7a7a7a]" },
@@ -36,11 +41,25 @@ function isOverdue(deadline: string) { return deadline && new Date(deadline) < n
 const EMPTY = { title: "", organization: "", deadline: "", status: "Exploring" as Status, notes: "", link: "" }
 
 export default function Opportunities() {
-  const [items, setItems]   = useState<Opportunity[]>(load)
-  const [search, setSearch] = useState("")
-  const [adding, setAdding] = useState(false)
-  const [draft, setDraft]   = useState(EMPTY)
+  const [items, setItems]       = useState<Opportunity[]>(load)
+  const [search, setSearch]     = useState("")
+  const [adding, setAdding]     = useState(false)
+  const [draft, setDraft]       = useState(EMPTY)
   const [selected, setSelected] = useState<Opportunity | null>(null)
+  const [colNames, setColNames] = useState<Record<Status, string>>(loadNames)
+  const [editingCol, setEditingCol] = useState<Status | null>(null)
+  const colInputRef = useRef<HTMLInputElement>(null)
+
+  function startEditCol(col: Status) {
+    setEditingCol(col)
+    setTimeout(() => colInputRef.current?.select(), 0)
+  }
+  function commitColName(col: Status, value: string) {
+    const name = value.trim() || DEFAULT_NAMES[col]
+    const next = { ...colNames, [col]: name }
+    setColNames(next); saveNames(next)
+    setEditingCol(null)
+  }
 
   function mutate(updated: Opportunity[]) { setItems(updated); save(updated) }
 
@@ -132,7 +151,24 @@ export default function Opportunities() {
             <div key={col} className="flex flex-col gap-2 w-52 shrink-0">
               <div className="flex items-center gap-2 mb-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${STATUS_STYLES[col].dot}`} />
-                <span className="text-[14px] font-semibold tracking-tight text-[#7a7a7a]">{col}</span>
+                {editingCol === col ? (
+                  <input
+                    ref={colInputRef}
+                    defaultValue={colNames[col]}
+                    className="text-[14px] font-semibold tracking-tight text-[#7a7a7a] bg-transparent border-b border-[#7a7a7a] outline-none w-24"
+                    onBlur={e => commitColName(col, e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") commitColName(col, (e.target as HTMLInputElement).value) }}
+                    autoFocus
+                  />
+                ) : (
+                  <span
+                    className="text-[14px] font-semibold tracking-tight text-[#7a7a7a] cursor-text hover:text-[#1d1d1f] transition-colors"
+                    onClick={() => startEditCol(col)}
+                    title="Click to rename"
+                  >
+                    {colNames[col]}
+                  </span>
+                )}
                 <span className="ml-auto text-[10px] text-[#c0c0c0]">{byStatus[col].length}</span>
               </div>
               <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
