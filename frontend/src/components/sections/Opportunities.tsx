@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from "react"
-import { Plus, X, Clock, Search, ExternalLink } from "lucide-react"
+import { Plus, X, Clock, Search, ExternalLink, Pencil } from "lucide-react"
 
 type Status = "Exploring" | "Applying" | "Interview" | "Offer" | "Archived"
 const COLUMNS: Status[] = ["Exploring", "Applying", "Interview", "Offer", "Archived"]
@@ -161,13 +161,14 @@ export default function Opportunities() {
                     autoFocus
                   />
                 ) : (
-                  <span
-                    className="text-[14px] font-semibold tracking-tight text-[#7a7a7a] cursor-text hover:text-[#1d1d1f] transition-colors"
+                  <button
+                    className="group/col flex items-center gap-1 text-[14px] font-semibold tracking-tight text-[#7a7a7a] hover:text-[#1d1d1f] transition-colors"
                     onClick={() => startEditCol(col)}
                     title="Click to rename"
                   >
                     {colNames[col]}
-                  </span>
+                    <Pencil size={10} className="opacity-0 group-hover/col:opacity-60 transition-opacity" />
+                  </button>
                 )}
                 <span className="ml-auto text-[10px] text-[#c0c0c0]">{byStatus[col].length}</span>
               </div>

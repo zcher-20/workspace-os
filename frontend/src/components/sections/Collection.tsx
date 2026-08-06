@@ -121,9 +121,10 @@ export default function Collection() {
   const [draft, setDraft]       = useState<{
     title: string; subtitle: string; objectType: ItemType; content: string; imageUrl: string; folderId: string
   }>({ title: "", subtitle: "", objectType: "note", content: "", imageUrl: "", folderId: "" })
-  const [dragOver, setDragOver]       = useState(false)
-  const [draggedId, setDraggedId]     = useState<string | null>(null)
-  const [dragOverId, setDragOverId]   = useState<string | null>(null)
+  const [dragOver, setDragOver]           = useState(false)
+  const [draggedId, setDraggedId]         = useState<string | null>(null)
+  const [dragOverId, setDragOverId]       = useState<string | null>(null)
+  const [folderDragOverId, setFolderDragOverId] = useState<string | null>(null)
   const [newFolderName, setNewFolderName] = useState("")
   const [creatingFolder, setCreatingFolder] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -164,6 +165,18 @@ export default function Collection() {
     e.preventDefault()
     if (id !== draggedId) setDragOverId(id)
   }
+  // Drag over a folder pill — assign item to that folder on drop
+  function onFolderDragOver(e: React.DragEvent, folderId: string) {
+    e.preventDefault(); setFolderDragOverId(folderId)
+  }
+  function onFolderDrop(e: React.DragEvent, folderId: string) {
+    e.preventDefault(); setFolderDragOverId(null)
+    if (!draggedId) return
+    const updated = items.map(i => i.id === draggedId ? { ...i, folderId } : i)
+    setItems(updated); save(updated); setDraggedId(null)
+  }
+  function onFolderDragLeave() { setFolderDragOverId(null) }
+
   function onCardDrop(e: React.DragEvent, targetId: string) {
     e.preventDefault()
     if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return }
@@ -271,7 +284,16 @@ export default function Collection() {
             All
           </button>
           {folders.map(f => (
-            <div key={f.id} className={`group flex items-center gap-1 shrink-0 ${activeFolderId === f.id ? "bg-[#eef1fb]" : "hover:bg-[#f5f5f7]"} transition-colors`}>
+            <div
+              key={f.id}
+              className={`group flex items-center gap-1 shrink-0 transition-colors ${
+                folderDragOverId === f.id ? "bg-[#dde8f5] ring-1 ring-[#2c4470]" :
+                activeFolderId === f.id ? "bg-[#eef1fb]" : "hover:bg-[#f5f5f7]"
+              }`}
+              onDragOver={e => onFolderDragOver(e, f.id)}
+              onDragLeave={onFolderDragLeave}
+              onDrop={e => onFolderDrop(e, f.id)}
+            >
               <button
                 onClick={() => setActiveFolderId(activeFolderId === f.id ? null : f.id)}
                 className={`flex items-center gap-1 pl-2 pr-1 py-1 text-[10px] font-semibold ${activeFolderId === f.id ? "text-[#2c4470]" : "text-[#7a7a7a]"}`}

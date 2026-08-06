@@ -1,511 +1,593 @@
-import { useState, useMemo, useRef, useEffect } from "react"
-import { Plus, X, Lightbulb, FolderOpen, ArrowRight, ZoomIn, ZoomOut, Maximize2, List } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import {
+  AlignLeft, Type, Image as ImageIcon, Lightbulb, FolderOpen,
+  X, ZoomIn, ZoomOut, Maximize2, Upload, Pencil, Eraser,
+  Link2, ChevronRight, FolderPlus,
+} from "lucide-react"
+
+// ── Types ──────────────────────────────────────────────────────────
 
 type ProjectStatus = "Active" | "Paused" | "Complete" | "Archived"
-const PROJECT_STATUSES: ProjectStatus[] = ["Active", "Paused", "Complete", "Archived"]
-
-const STATUS_STYLES: Record<ProjectStatus, { bg: string; text: string; dot: string }> = {
-  Active:   { bg: "bg-[#ecfdf5]", text: "text-[#065f46]", dot: "#5b9b8a" },
-  Paused:   { bg: "bg-[#fef3e8]", text: "text-[#92400e]", dot: "#c4856a" },
-  Complete: { bg: "bg-[#eef1fb]", text: "text-[#1e3a8a]", dot: "#4f7ab3" },
-  Archived: { bg: "bg-[#f5f5f7]", text: "text-[#7a7a7a]", dot: "#c0c0c0" },
+const STATUSES: ProjectStatus[] = ["Active", "Paused", "Complete", "Archived"]
+const STATUS_DOT: Record<ProjectStatus, string> = {
+  Active: "#b08a8a", Paused: "#a09080", Complete: "#8a8a9a", Archived: "#c0bdb8",
 }
 
-interface Project { id: string; name: string; description: string; status: ProjectStatus; tags: string; dueDate: string; createdAt: string }
-interface Idea    { id: string; title: string; description: string; tags: string; createdAt: string }
-interface Pos     { x: number; y: number }
+type BlockType = "title" | "note" | "image" | "idea" | "project"
+type CanvasMode = "select" | "draw" | "arrow"
 
-const LS_PROJECTS = "workspace:projects"
-const LS_IDEAS    = "workspace:ideas"
-const LS_POS      = "workspace:canvas-positions"
-
-function loadProjects(): Project[] { try { return JSON.parse(localStorage.getItem(LS_PROJECTS) || "[]") } catch { return [] } }
-function loadIdeas(): Idea[]       { try { return JSON.parse(localStorage.getItem(LS_IDEAS)    || "[]") } catch { return [] } }
-function loadPos(): Record<string, Pos> { try { return JSON.parse(localStorage.getItem(LS_POS) || "{}") } catch { return {} } }
-function saveProjects(p: Project[]) { localStorage.setItem(LS_PROJECTS, JSON.stringify(p)) }
-function saveIdeas(i: Idea[])       { localStorage.setItem(LS_IDEAS,    JSON.stringify(i)) }
-function savePos(p: Record<string, Pos>) { localStorage.setItem(LS_POS, JSON.stringify(p)) }
-
-function parseTags(s: string) { return s.split(",").map(t => t.trim()).filter(Boolean) }
-function formatDate(iso: string) {
-  if (!iso) return ""
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-}
-const TAG_PALETTE = ["#eef1fb text-[#1e3a8a]", "#ecfdf5 text-[#065f46]", "#f5f0ff text-[#4c1d95]", "#fef3e8 text-[#92400e]"]
-function tagColor(tag: string) {
-  let h = 0; for (const c of tag) h = (h * 31 + c.charCodeAt(0)) & 0xffff
-  const pair = TAG_PALETTE[h % TAG_PALETTE.length].split(" ")
-  return { bg: pair[0], text: pair[1] }
-}
-function randPos(seed: number): Pos {
-  return { x: 80 + (seed * 137 % 700), y: 60 + (seed * 97 % 400) }
+interface Block {
+  id: string; type: BlockType
+  x: number; y: number; w?: number; h?: number
+  folderId?: string | null
+  content?: string
+  imageUrl?: string; caption?: string
+  title?: string; body?: string
+  name?: string; status?: ProjectStatus; desc?: string; tags?: string
+  createdAt: string
 }
 
-const EMPTY_PROJECT = { name: "", description: "", status: "Active" as ProjectStatus, tags: "", dueDate: "" }
-const EMPTY_IDEA    = { title: "", description: "", tags: "" }
+interface CanvasFolder { id: string; name: string }
+interface DrawStroke { id: string; path: string; folderId: string | null }
+interface Connection { id: string; fromId: string; toId: string; folderId: string | null }
 
-// ── Card components ──────────────────────────────────────────────
+// Default sizes for arrow anchoring
+const BDEF: Record<BlockType, [number, number]> = {
+  title: [200, 36], note: [260, 100], image: [240, 200], idea: [200, 90], project: [220, 80],
+}
 
-function ProjectCard({ project, selected, onClick }: { project: Project; selected: boolean; onClick: () => void }) {
-  const s = STATUS_STYLES[project.status]
-  const tags = parseTags(project.tags)
+// ── Storage ────────────────────────────────────────────────────────
+
+const LS_BLOCKS = "workspace:canvas-v2"
+const LS_FOLDERS = "workspace:canvas-folders"
+const LS_STROKES = "workspace:canvas-strokes"
+const LS_CONNS   = "workspace:canvas-connections"
+
+function ld<T>(key: string, def: T): T {
+  try { return JSON.parse(localStorage.getItem(key) || "null") ?? def } catch { return def }
+}
+function sv(key: string, v: unknown) { localStorage.setItem(key, JSON.stringify(v)) }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2) }
+
+// ── InlineText ─────────────────────────────────────────────────────
+
+function InlineText({ value, onChange, placeholder, className, multiline }: {
+  value: string; onChange: (v: string) => void; placeholder?: string
+  className?: string; multiline?: boolean
+}) {
+  const ref = useRef<any>(null)
+  useEffect(() => { ref.current?.focus(); if (!multiline) ref.current?.select?.() }, [])
+  if (multiline) {
+    return (
+      <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder} rows={4}
+        className={`w-full resize-none bg-transparent outline-none placeholder:text-[#c0c0c0] ${className ?? ""}`} />
+    )
+  }
   return (
-    <div
-      onClick={onClick}
-      className={`bg-white border shadow-sm w-52 cursor-pointer transition-shadow hover:shadow-md ${selected ? "border-[#2c4470]/40 shadow-md" : "border-[#e0e0e0]"}`}
-      style={{ userSelect: "none" }}
-    >
-      {/* Status bar */}
-      <div className="h-1" style={{ background: STATUS_STYLES[project.status].dot }} />
-      <div className="px-3 py-3">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className={`text-[9px] font-bold uppercase tracking-widest ${s.text}`}>{project.status}</span>
-          {project.dueDate && <span className="text-[9px] text-[#a0a0a0]">{formatDate(project.dueDate)}</span>}
-        </div>
-        <p className="text-[13px] font-semibold text-[#1d1d1f] leading-snug mb-1">{project.name}</p>
-        {project.description && (
-          <p className="text-[11px] text-[#7a7a7a] leading-relaxed line-clamp-3">{project.description}</p>
-        )}
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {tags.slice(0, 3).map(t => {
-              const c = tagColor(t)
-              return <span key={t} className={`px-1.5 py-0.5 text-[9px] font-medium ${c.text}`} style={{ background: c.bg }}>{t}</span>
-            })}
-          </div>
-        )}
+    <input ref={ref} value={value} onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={`w-full bg-transparent outline-none placeholder:text-[#c0c0c0] ${className ?? ""}`} />
+  )
+}
+
+// ── Block renderers ────────────────────────────────────────────────
+
+const SH = { boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }
+
+function TitleBlock({ block, editing, onEdit, onChange }: {
+  block: Block; editing: boolean; onEdit: () => void; onChange: (p: Partial<Block>) => void
+}) {
+  return (
+    <div className="select-none" style={{ minWidth: block.w ?? 160 }}>
+      {editing
+        ? <InlineText value={block.content ?? ""} onChange={v => onChange({ content: v })}
+            placeholder="Title…" className="text-[22px] font-bold text-[#1d1d1f] leading-tight tracking-tight" />
+        : <p className="text-[22px] font-bold text-[#1d1d1f] leading-tight tracking-tight cursor-text whitespace-nowrap" onClick={onEdit}>
+            {block.content || <span className="text-[#d0d0d0] font-normal text-[18px]">Title…</span>}
+          </p>}
+    </div>
+  )
+}
+
+function NoteBlock({ block, editing, onEdit, onChange }: {
+  block: Block; editing: boolean; onEdit: () => void; onChange: (p: Partial<Block>) => void
+}) {
+  return (
+    <div className="bg-white select-none" style={{ ...SH, width: block.w ?? 260, minHeight: block.h ?? 72 }}>
+      <div className="px-4 py-3">
+        {editing
+          ? <InlineText value={block.content ?? ""} onChange={v => onChange({ content: v })}
+              placeholder="Write in markdown…" className="text-[13px] text-[#1d1d1f] leading-[1.7]" multiline />
+          : <div className="cursor-text min-h-[48px]" onClick={onEdit}>
+              {block.content
+                ? <div className="text-[13px] leading-[1.7] text-[#1d1d1f] [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_strong]:font-semibold [&_em]:italic [&_code]:bg-[#f0f0f0] [&_code]:px-1 [&_code]:rounded [&_code]:text-[12px] [&_p]:mb-0.5">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
+                  </div>
+                : <p className="text-[#c0c0c0] text-[13px]">Click to write…</p>}
+            </div>}
       </div>
     </div>
   )
 }
 
-function IdeaCard({ idea, selected, onClick }: { idea: Idea; selected: boolean; onClick: () => void }) {
-  const tags = parseTags(idea.tags)
+function ImageBlock({ block, editing, onEdit, onChange }: {
+  block: Block; editing: boolean; onEdit: () => void; onChange: (p: Partial<Block>) => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  function loadFile(file: File) {
+    if (!file.type.startsWith("image/")) return
+    const reader = new FileReader()
+    reader.onload = e => onChange({ imageUrl: e.target?.result as string })
+    reader.readAsDataURL(file)
+  }
   return (
-    <div
-      onClick={onClick}
-      className={`w-44 border cursor-pointer shadow-sm transition-shadow hover:shadow-md ${selected ? "border-[#c4a000]/60 shadow-md" : "border-[#e8d88a]/40"}`}
-      style={{ background: "#fdfbe8", userSelect: "none" }}
-    >
-      <div className="px-3 py-3">
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <Lightbulb size={10} className="text-[#9a8b6e] shrink-0" />
-          <span className="text-[9px] font-bold uppercase tracking-widest text-[#9a8b6e]">Idea</span>
-        </div>
-        <p className="text-[13px] font-semibold text-[#1d1d1f] leading-snug mb-1">{idea.title}</p>
-        {idea.description && (
-          <p className="text-[11px] text-[#7a7a7a] leading-relaxed line-clamp-3">{idea.description}</p>
-        )}
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {tags.slice(0, 3).map(t => {
-              const c = tagColor(t)
-              return <span key={t} className={`px-1.5 py-0.5 text-[9px] font-medium ${c.text}`} style={{ background: c.bg }}>{t}</span>
-            })}
-          </div>
-        )}
+    <div className="bg-white select-none" style={{ ...SH, width: block.w ?? 240 }}>
+      <input ref={fileRef} type="file" accept="image/*" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) loadFile(f); e.target.value = "" }} />
+      {block.imageUrl
+        ? <>
+            <img src={block.imageUrl} alt="" className="w-full block object-cover"
+              style={block.h ? { height: block.h } : {}} />
+            {(editing || block.caption) && (
+              <div className="px-3 py-2 border-t border-[#f0f0f0]">
+                {editing
+                  ? <InlineText value={block.caption ?? ""} onChange={v => onChange({ caption: v })} placeholder="Caption…" className="text-[11px] text-[#7a7a7a]" />
+                  : <p className="text-[11px] text-[#7a7a7a] cursor-text" onClick={onEdit}>{block.caption}</p>}
+              </div>
+            )}
+          </>
+        : <div className="flex flex-col items-center justify-center gap-2 py-10 cursor-pointer hover:bg-[#fafafa] transition-colors"
+            onClick={() => fileRef.current?.click()}
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) loadFile(f) }}>
+            <Upload size={20} className="text-[#c0c0c0]" />
+            <span className="text-[11px] text-[#a0a0a0]">Drop or click</span>
+            {editing && (
+              <input autoFocus placeholder="or paste URL…"
+                className="text-[11px] border border-[#e0e0e0] px-2 py-1 outline-none w-40 mt-1"
+                onKeyDown={e => { if (e.key === "Enter") onChange({ imageUrl: (e.target as HTMLInputElement).value }) }}
+                onClick={ev => ev.stopPropagation()} />
+            )}
+          </div>}
+    </div>
+  )
+}
+
+function IdeaBlock({ block, editing, onEdit, onChange }: {
+  block: Block; editing: boolean; onEdit: () => void; onChange: (p: Partial<Block>) => void
+}) {
+  return (
+    <div className="select-none" style={{ ...SH, background: "#fefefb", width: block.w ?? 200, minHeight: block.h ?? 90 }}>
+      <div className="px-4 py-3">
+        <Lightbulb size={11} className="text-[#bfb090] mb-2" />
+        {editing
+          ? <>
+              <InlineText value={block.title ?? ""} onChange={v => onChange({ title: v })}
+                placeholder="Idea title…" className="text-[13px] font-semibold text-[#1d1d1f] mb-1 block" />
+              <InlineText value={block.body ?? ""} onChange={v => onChange({ body: v })}
+                placeholder="Describe it…" className="text-[11px] text-[#7a7a7a] leading-relaxed" multiline />
+            </>
+          : <div className="cursor-text" onClick={onEdit}>
+              <p className="text-[13px] font-semibold text-[#1d1d1f] leading-snug mb-1 min-h-[18px]">
+                {block.title || <span className="text-[#c8c8c8] font-normal">Idea…</span>}
+              </p>
+              {block.body && <p className="text-[11px] text-[#7a7a7a] leading-relaxed whitespace-pre-wrap break-words">{block.body}</p>}
+            </div>}
       </div>
     </div>
   )
 }
 
-// ── Main component ───────────────────────────────────────────────
+function ProjectBlock({ block, editing, onEdit, onChange }: {
+  block: Block; editing: boolean; onEdit: () => void; onChange: (p: Partial<Block>) => void
+}) {
+  const status = block.status ?? "Active"
+  return (
+    <div className="bg-white select-none overflow-hidden" style={{ ...SH, width: block.w ?? 220 }}>
+      <div className="h-1" style={{ background: STATUS_DOT[status] }} />
+      <div className="px-3 py-3">
+        {editing
+          ? <>
+              <div className="flex items-center gap-2 mb-2.5">
+                {STATUSES.map(st => (
+                  <button key={st} title={st} onClick={() => onChange({ status: st })}
+                    className="w-3 h-3 rounded-full transition-transform hover:scale-125"
+                    style={{ background: STATUS_DOT[st], outline: status === st ? `2px solid ${STATUS_DOT[st]}` : "none", outlineOffset: 2 }} />
+                ))}
+              </div>
+              <InlineText value={block.name ?? ""} onChange={v => onChange({ name: v })}
+                placeholder="Project name…" className="text-[13px] font-semibold text-[#1d1d1f] mb-1 block" />
+              <InlineText value={block.desc ?? ""} onChange={v => onChange({ desc: v })}
+                placeholder="Description…" className="text-[11px] text-[#7a7a7a]" multiline />
+              <input value={block.tags ?? ""} onChange={e => onChange({ tags: e.target.value })}
+                placeholder="Tags…"
+                className="mt-2 w-full text-[10px] text-[#7a7a7a] bg-transparent outline-none border-b border-[#e8e8e8] pb-0.5" />
+            </>
+          : <div className="cursor-text" onClick={onEdit}>
+              <p className="text-[13px] font-semibold text-[#1d1d1f] leading-snug min-h-[18px]">
+                {block.name || <span className="text-[#c0c0c0] font-normal">Project name…</span>}
+              </p>
+              {block.desc && <p className="text-[11px] text-[#7a7a7a] mt-1 leading-relaxed whitespace-pre-wrap break-words">{block.desc}</p>}
+            </div>}
+      </div>
+    </div>
+  )
+}
+
+// ── Main canvas ────────────────────────────────────────────────────
 
 export default function Projects() {
-  const [projects, setProjects]           = useState<Project[]>(loadProjects)
-  const [ideas, setIdeas]                 = useState<Idea[]>(loadIdeas)
-  const [positions, setPositions]         = useState<Record<string, Pos>>(loadPos)
-  const [view, setView]                   = useState<"canvas" | "list">("canvas")
-  const [selectedId, setSelectedId]       = useState<string | null>(null)
-  const [adding, setAdding]               = useState<"project" | "idea" | null>(null)
-  const [projectDraft, setProjectDraft]   = useState(EMPTY_PROJECT)
-  const [ideaDraft, setIdeaDraft]         = useState(EMPTY_IDEA)
-  const [zoom, setZoom]                   = useState(1)
-  const [pan, setPan]                     = useState({ x: 60, y: 40 })
-  const [isPanning, setIsPanning]         = useState(false)
+  const [blocks,      setBlocks]      = useState<Block[]>(() => ld(LS_BLOCKS, []))
+  const [folders,     setFolders]     = useState<CanvasFolder[]>(() => ld(LS_FOLDERS, []))
+  const [strokes,     setStrokes]     = useState<DrawStroke[]>(() => ld(LS_STROKES, []))
+  const [connections, setConnections] = useState<Connection[]>(() => ld(LS_CONNS, []))
 
-  const panRef      = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
-  const dragRef     = useRef<{ id: string; ox: number; oy: number } | null>(null)
+  const [editingId, setEditingId]   = useState<string | null>(null)
+  const [mode,      setMode]        = useState<CanvasMode>("select")
+  const [arrowFrom, setArrowFrom]   = useState<string | null>(null)
+  const [zoom,      setZoom]        = useState(1)
+  const [pan,       setPan]         = useState({ x: 80, y: 60 })
+  const [isPanning, setIsPanning]   = useState(false)
+  const [isDrawing, setIsDrawing]   = useState(false)
+  const [liveStroke, setLiveStroke] = useState("")
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
+  const [creatingFolder,  setCreatingFolder]   = useState(false)
+  const [folderName,      setFolderName]       = useState("")
+
   const containerRef = useRef<HTMLDivElement>(null)
+  const panRef       = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null)
+  const dragRef      = useRef<{ id: string; ox: number; oy: number } | null>(null)
+  const resizeRef    = useRef<{ id: string; sx: number; sw: number } | null>(null)
+  const strokePts    = useRef<{ x: number; y: number }[]>([])
 
-  // Ensure every item has a canvas position
-  useEffect(() => {
-    const next = { ...positions }
-    let changed = false
-    projects.forEach((p, i) => { if (!next[p.id]) { next[p.id] = randPos(i); changed = true } })
-    ideas.forEach((idea, i)  => { if (!next[idea.id]) { next[idea.id] = randPos(projects.length + i + 50); changed = true } })
-    if (changed) { setPositions(next); savePos(next) }
-  }, [projects, ideas])
+  const visibleBlocks  = blocks.filter(b => (b.folderId ?? null) === currentFolderId)
+  const visibleStrokes = strokes.filter(s => s.folderId === currentFolderId)
+  const visibleConns   = connections.filter(c => c.folderId === currentFolderId)
+  const folderObj      = folders.find(f => f.id === currentFolderId) ?? null
 
-  const selectedProject = selectedId ? projects.find(p => p.id === selectedId) ?? null : null
-  const selectedIdea    = selectedId ? ideas.find(i => i.id === selectedId) ?? null : null
+  function mutateBlocks(next: Block[]) { setBlocks(next); sv(LS_BLOCKS, next) }
+  function mutateStrokes(next: DrawStroke[]) { setStrokes(next); sv(LS_STROKES, next) }
+  function mutateConns(next: Connection[]) { setConnections(next); sv(LS_CONNS, next) }
+  function mutateFolders(next: CanvasFolder[]) { setFolders(next); sv(LS_FOLDERS, next) }
 
-  function updatePos(id: string, pos: Pos) {
-    setPositions(prev => { const next = { ...prev, [id]: pos }; savePos(next); return next })
+  function patch(id: string, p: Partial<Block>) {
+    mutateBlocks(blocks.map(b => b.id === id ? { ...b, ...p } : b))
+  }
+  function removeBlock(id: string) {
+    mutateBlocks(blocks.filter(b => b.id !== id))
+    mutateConns(connections.filter(c => c.fromId !== id && c.toId !== id))
+    if (editingId === id) setEditingId(null)
+  }
+  function addBlock(type: BlockType) {
+    const cw = containerRef.current?.clientWidth ?? 800
+    const ch = containerRef.current?.clientHeight ?? 600
+    const x = (cw / 2 - pan.x) / zoom + (Math.random() - 0.5) * 80
+    const y = (ch / 2 - pan.y) / zoom + (Math.random() - 0.5) * 60
+    const b: Block = { id: uid(), type, x, y, folderId: currentFolderId, createdAt: new Date().toISOString() }
+    if (type === "project") b.status = "Active"
+    mutateBlocks([...blocks, b])
+    setEditingId(b.id)
+  }
+  function createFolder() {
+    if (!folderName.trim()) { setCreatingFolder(false); return }
+    const f: CanvasFolder = { id: uid(), name: folderName.trim() }
+    mutateFolders([...folders, f])
+    setFolderName("")
+    setCreatingFolder(false)
+    setCurrentFolderId(f.id)
   }
 
-  // Canvas pointer events
+  function screenToCanvas(cx: number, cy: number) {
+    const r = containerRef.current!.getBoundingClientRect()
+    return { x: (cx - r.left - pan.x) / zoom, y: (cy - r.top - pan.y) / zoom }
+  }
+  function ptPath(pts: { x: number; y: number }[]): string {
+    if (pts.length < 2) return ""
+    let d = `M ${pts[0].x} ${pts[0].y}`
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i + 1].x) / 2
+      const my = (pts[i].y + pts[i + 1].y) / 2
+      d += ` Q ${pts[i].x} ${pts[i].y} ${mx} ${my}`
+    }
+    d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`
+    return d
+  }
+  function blockCenter(b: Block): [number, number] {
+    const [dw, dh] = BDEF[b.type]
+    return [b.x + (b.w ?? dw) / 2, b.y + (b.h ?? dh) / 2]
+  }
+
+  // ── Pointer events — drawing (Apple Pencil + mouse) ────────────
+  function onPointerDown(e: React.PointerEvent) {
+    if (mode !== "draw") return
+    e.preventDefault()
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    strokePts.current = [screenToCanvas(e.clientX, e.clientY)]
+    setIsDrawing(true)
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (mode !== "draw" || !isDrawing) return
+    strokePts.current = [...strokePts.current, screenToCanvas(e.clientX, e.clientY)]
+    setLiveStroke(ptPath(strokePts.current))
+  }
+  function onPointerUp() {
+    if (mode !== "draw") return
+    if (strokePts.current.length > 1) {
+      mutateStrokes([...strokes, { id: uid(), path: ptPath(strokePts.current), folderId: currentFolderId }])
+    }
+    strokePts.current = []; setLiveStroke(""); setIsDrawing(false)
+  }
+
+  // ── Mouse events — select / pan / drag / resize ─────────────────
   function onCanvasDown(e: React.MouseEvent) {
-    if (dragRef.current) return
-    panRef.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y }
+    if (mode === "draw" || mode === "arrow") return
+    if (editingId) { setEditingId(null); return }
+    if ((e.target as HTMLElement).closest("[data-block]")) return
+    panRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y }
     setIsPanning(true)
   }
   function onCardDown(e: React.MouseEvent, id: string) {
-    e.stopPropagation()
-    const pos = positions[id] ?? { x: 0, y: 0 }
-    // offset = clientX - (pan.x + pos.x * zoom)  →  how far the pointer is from card origin in screen space
-    dragRef.current = {
-      id,
-      ox: e.clientX - pan.x - pos.x * zoom,
-      oy: e.clientY - pan.y - pos.y * zoom,
+    if (mode === "draw") return
+    if (mode === "arrow") {
+      e.stopPropagation()
+      if (!arrowFrom) {
+        setArrowFrom(id)
+      } else if (arrowFrom !== id) {
+        mutateConns([...connections, { id: uid(), fromId: arrowFrom, toId: id, folderId: currentFolderId }])
+        setArrowFrom(null); setMode("select")
+      }
+      return
     }
+    if (editingId === id) return
+    e.stopPropagation()
+    const pos = blocks.find(b => b.id === id)
+    if (!pos) return
+    dragRef.current = { id, ox: e.clientX - pan.x - pos.x * zoom, oy: e.clientY - pan.y - pos.y * zoom }
   }
-  function onCanvasMove(e: React.MouseEvent) {
+  function onResizeDown(e: React.MouseEvent, block: Block) {
+    e.stopPropagation()
+    resizeRef.current = { id: block.id, sx: e.clientX, sw: block.w ?? BDEF[block.type][0] }
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    if (mode === "draw") return
+    if (resizeRef.current) {
+      const { id, sx, sw } = resizeRef.current
+      patch(id, { w: Math.max(80, sw + (e.clientX - sx) / zoom) })
+      return
+    }
     if (dragRef.current) {
       const { id, ox, oy } = dragRef.current
-      // canvas pos = (screenPos - pan - offset) / zoom
-      updatePos(id, { x: (e.clientX - pan.x - ox) / zoom, y: (e.clientY - pan.y - oy) / zoom })
+      patch(id, { x: (e.clientX - pan.x - ox) / zoom, y: (e.clientY - pan.y - oy) / zoom })
       return
     }
     if (panRef.current) {
-      // pan is in screen pixels directly
-      setPan({ x: panRef.current.panX + (e.clientX - panRef.current.startX), y: panRef.current.panY + (e.clientY - panRef.current.startY) })
+      setPan({ x: panRef.current.px + (e.clientX - panRef.current.sx), y: panRef.current.py + (e.clientY - panRef.current.sy) })
     }
   }
-  function onCanvasUp() {
-    dragRef.current = null
-    panRef.current = null
-    setIsPanning(false)
+  function onMouseUp() {
+    dragRef.current = null; resizeRef.current = null; panRef.current = null; setIsPanning(false)
   }
 
-  // CRUD
-  function addProject() {
-    if (!projectDraft.name.trim()) return
-    const p: Project = { id: Date.now().toString(), ...projectDraft, name: projectDraft.name.trim(), createdAt: new Date().toISOString() }
-    const updated = [p, ...projects]; setProjects(updated); saveProjects(updated)
-    const pos = { x: 80 + Math.random() * 600, y: 60 + Math.random() * 350 }
-    updatePos(p.id, pos)
-    setAdding(null); setProjectDraft(EMPTY_PROJECT); setSelectedId(p.id)
-  }
-  function addIdea() {
-    if (!ideaDraft.title.trim()) return
-    const i: Idea = { id: Date.now().toString(), ...ideaDraft, title: ideaDraft.title.trim(), createdAt: new Date().toISOString() }
-    const updated = [i, ...ideas]; setIdeas(updated); saveIdeas(updated)
-    const pos = { x: 80 + Math.random() * 600, y: 60 + Math.random() * 350 }
-    updatePos(i.id, pos)
-    setAdding(null); setIdeaDraft(EMPTY_IDEA); setSelectedId(i.id)
-  }
-  function convertToProject(idea: Idea) {
-    const p: Project = { id: Date.now().toString(), name: idea.title, description: idea.description, status: "Active", tags: idea.tags, dueDate: "", createdAt: new Date().toISOString() }
-    const updatedP = [p, ...projects]; setProjects(updatedP); saveProjects(updatedP)
-    const updatedI = ideas.filter(i => i.id !== idea.id); setIdeas(updatedI); saveIdeas(updatedI)
-    updatePos(p.id, positions[idea.id] ?? { x: 200, y: 200 })
-    setSelectedId(p.id)
-  }
-  function updateStatus(id: string, status: ProjectStatus) {
-    const updated = projects.map(p => p.id === id ? { ...p, status } : p)
-    setProjects(updated); saveProjects(updated)
-  }
-  function removeProject(id: string) {
-    const updated = projects.filter(p => p.id !== id); setProjects(updated); saveProjects(updated)
-    if (selectedId === id) setSelectedId(null)
-  }
-  function removeIdea(id: string) {
-    const updated = ideas.filter(i => i.id !== id); setIdeas(updated); saveIdeas(updated)
-    if (selectedId === id) setSelectedId(null)
-  }
-
-  // ── Canvas view ───────────────────────────────────────────────
-  if (view === "canvas") {
-    return (
-      <div className="flex flex-col h-full w-full relative">
-
-        {/* Toolbar */}
-        <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5">
-          <button onClick={() => setAdding("project")} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-[#e0e0e0] shadow-sm text-[11px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
-            <Plus size={11} className="text-[#4f7ab3]" /> Project
-          </button>
-          <button onClick={() => setAdding("idea")} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-[#e0e0e0] shadow-sm text-[11px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
-            <Plus size={11} className="text-[#9a8b6e]" /> Idea
-          </button>
-          <button onClick={() => setView("list")} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-[#e0e0e0] shadow-sm text-[11px] text-[#7a7a7a] hover:bg-[#f5f5f7] transition-colors">
-            <List size={11} /> List
-          </button>
-        </div>
-
-        {/* Zoom */}
-        <div className="absolute top-3 right-3 z-20 flex flex-col gap-1">
-          <button onClick={() => setZoom(z => Math.min(2.5, z + 0.2))} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><ZoomIn size={11} className="text-[#7a7a7a]" /></button>
-          <button onClick={() => setZoom(z => Math.max(0.3, z - 0.2))} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><ZoomOut size={11} className="text-[#7a7a7a]" /></button>
-          <button onClick={() => { setZoom(1); setPan({ x: 60, y: 40 }) }} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><Maximize2 size={11} className="text-[#7a7a7a]" /></button>
-        </div>
-
-        {/* Canvas */}
-        <div
-          ref={containerRef}
-          className="flex-1 overflow-hidden bg-white"
-          style={{
-            cursor: isPanning || dragRef.current ? "grabbing" : "grab",
-            backgroundImage: "radial-gradient(circle, #d8d8d8 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
-          }}
-          onMouseDown={onCanvasDown}
-          onMouseMove={onCanvasMove}
-          onMouseUp={onCanvasUp}
-          onMouseLeave={onCanvasUp}
-        >
-          <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "0 0", transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
-            {projects.map(p => {
-              const pos = positions[p.id]
-              if (!pos) return null
-              return (
-                <div
-                  key={p.id}
-                  style={{ position: "absolute", left: pos.x, top: pos.y }}
-                  onMouseDown={e => onCardDown(e, p.id)}
-                >
-                  <ProjectCard project={p} selected={selectedId === p.id} onClick={() => setSelectedId(selectedId === p.id ? null : p.id)} />
-                </div>
-              )
-            })}
-            {ideas.map(idea => {
-              const pos = positions[idea.id]
-              if (!pos) return null
-              return (
-                <div
-                  key={idea.id}
-                  style={{ position: "absolute", left: pos.x, top: pos.y }}
-                  onMouseDown={e => onCardDown(e, idea.id)}
-                >
-                  <IdeaCard idea={idea} selected={selectedId === idea.id} onClick={() => setSelectedId(selectedId === idea.id ? null : idea.id)} />
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Selected detail panel */}
-        {(selectedProject || selectedIdea) && (
-          <div className="absolute right-3 top-3 bottom-3 z-20 w-60 bg-white border border-[#e0e0e0] shadow-lg flex flex-col overflow-y-auto">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0f0]">
-              <p className="text-[12px] font-semibold text-[#1d1d1f] truncate flex-1 pr-2">
-                {selectedProject?.name ?? selectedIdea?.title}
-              </p>
-              <button onClick={() => setSelectedId(null)}><X size={13} className="text-[#7a7a7a]" /></button>
-            </div>
-
-            <div className="flex flex-col gap-4 px-4 py-4 flex-1">
-              {selectedProject && (
-                <>
-                  {selectedProject.description && <p className="text-[12px] text-[#7a7a7a] leading-relaxed">{selectedProject.description}</p>}
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#a0a0a0] mb-2">Status</p>
-                    <div className="flex flex-col gap-1">
-                      {PROJECT_STATUSES.map(s => (
-                        <button key={s} onClick={() => updateStatus(selectedProject.id, s)}
-                          className={`flex items-center gap-2 px-2.5 py-1.5 text-[12px] transition-colors ${selectedProject.status === s ? `${STATUS_STYLES[s].bg} ${STATUS_STYLES[s].text} font-semibold` : "hover:bg-[#f5f5f7] text-[#7a7a7a]"}`}>
-                          <div className="w-1.5 h-1.5 rounded-full" style={{ background: STATUS_STYLES[s].dot }} /> {s}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {selectedProject.dueDate && (
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#a0a0a0] mb-1">Due</p>
-                      <p className="text-[12px] text-[#1d1d1f]">{formatDate(selectedProject.dueDate)}</p>
-                    </div>
-                  )}
-                  {selectedProject.tags && (
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#a0a0a0] mb-2">Tags</p>
-                      <div className="flex flex-wrap gap-1">
-                        {parseTags(selectedProject.tags).map(t => {
-                          const c = tagColor(t)
-                          return <span key={t} className={`px-2 py-0.5 text-[10px] font-medium ${c.text}`} style={{ background: c.bg }}>{t}</span>
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <button onClick={() => removeProject(selectedProject.id)} className="mt-auto text-[11px] text-[#7a7a7a] hover:text-red-600 transition-colors text-left">Delete project</button>
-                </>
-              )}
-
-              {selectedIdea && (
-                <>
-                  {selectedIdea.description && <p className="text-[12px] text-[#7a7a7a] leading-relaxed">{selectedIdea.description}</p>}
-                  {selectedIdea.tags && (
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#a0a0a0] mb-2">Tags</p>
-                      <div className="flex flex-wrap gap-1">
-                        {parseTags(selectedIdea.tags).map(t => {
-                          const c = tagColor(t)
-                          return <span key={t} className={`px-2 py-0.5 text-[10px] font-medium ${c.text}`} style={{ background: c.bg }}>{t}</span>
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <button onClick={() => convertToProject(selectedIdea)} className="flex items-center gap-1.5 px-3 py-2 bg-[#1d1d1f] text-white text-[11px] font-medium hover:bg-[#2d2d2f] transition-colors">
-                    <ArrowRight size={11} /> Convert to project
-                  </button>
-                  <button onClick={() => removeIdea(selectedIdea.id)} className="mt-auto text-[11px] text-[#7a7a7a] hover:text-red-600 transition-colors text-left">Delete idea</button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Modals */}
-        {adding && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setAdding(null)}>
-            <div className="bg-white shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-[15px] font-semibold text-[#1d1d1f]">New {adding}</h2>
-                <button onClick={() => setAdding(null)}><X size={15} className="text-[#7a7a7a]" /></button>
-              </div>
-              {adding === "project" ? (
-                <div className="flex flex-col gap-3">
-                  <input autoFocus value={projectDraft.name} onChange={e => setProjectDraft(d => ({ ...d, name: e.target.value }))}
-                    onKeyDown={e => e.key === "Enter" && addProject()} placeholder="Project name"
-                    className="w-full px-3 py-2 text-[13px] border border-[#e0e0e0] focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
-                  <textarea value={projectDraft.description} onChange={e => setProjectDraft(d => ({ ...d, description: e.target.value }))}
-                    placeholder="Description (optional)" rows={3}
-                    className="w-full px-3 py-2 text-[12px] border border-[#e0e0e0] focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30 resize-none" />
-                  <select value={projectDraft.status} onChange={e => setProjectDraft(d => ({ ...d, status: e.target.value as ProjectStatus }))}
-                    className="w-full px-3 py-2 text-[12px] border border-[#e0e0e0] bg-white focus:outline-none">
-                    {PROJECT_STATUSES.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                  <input value={projectDraft.tags} onChange={e => setProjectDraft(d => ({ ...d, tags: e.target.value }))}
-                    placeholder="Tags (comma separated)" className="w-full px-3 py-2 text-[12px] border border-[#e0e0e0] focus:outline-none" />
-                  <input type="date" value={projectDraft.dueDate} onChange={e => setProjectDraft(d => ({ ...d, dueDate: e.target.value }))}
-                    className="w-full px-3 py-2 text-[12px] border border-[#e0e0e0] focus:outline-none" />
-                  <button onClick={addProject} disabled={!projectDraft.name.trim()}
-                    className="py-2 bg-[#1d1d1f] text-white text-[13px] font-medium hover:bg-[#2d2d2f] disabled:opacity-40 transition-colors">
-                    Add to canvas
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  <input autoFocus value={ideaDraft.title} onChange={e => setIdeaDraft(d => ({ ...d, title: e.target.value }))}
-                    onKeyDown={e => e.key === "Enter" && addIdea()} placeholder="Idea title"
-                    className="w-full px-3 py-2 text-[13px] border border-[#e0e0e0] focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
-                  <textarea value={ideaDraft.description} onChange={e => setIdeaDraft(d => ({ ...d, description: e.target.value }))}
-                    placeholder="Describe it…" rows={3}
-                    className="w-full px-3 py-2 text-[12px] border border-[#e0e0e0] focus:outline-none resize-none" />
-                  <input value={ideaDraft.tags} onChange={e => setIdeaDraft(d => ({ ...d, tags: e.target.value }))}
-                    placeholder="Tags (comma separated)" className="w-full px-3 py-2 text-[12px] border border-[#e0e0e0] focus:outline-none" />
-                  <button onClick={addIdea} disabled={!ideaDraft.title.trim()}
-                    className="py-2 bg-[#1d1d1f] text-white text-[13px] font-medium hover:bg-[#2d2d2f] disabled:opacity-40 transition-colors">
-                    Add to canvas
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // ── List view fallback ────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center gap-3">
-        <button onClick={() => setView("canvas")} className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium bg-white border border-[#e0e0e0] hover:bg-[#f5f5f7] transition-colors">
-          <FolderOpen size={12} /> Canvas
-        </button>
-        <button onClick={() => setAdding("project")} className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium bg-[#1d1d1f] text-white hover:bg-[#2d2d2f] transition-colors ml-auto">
-          <Plus size={12} /> Add project
-        </button>
-        <button onClick={() => setAdding("idea")} className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium bg-white border border-[#e0e0e0] hover:bg-[#f5f5f7] transition-colors">
-          <Plus size={12} /> Add idea
-        </button>
-      </div>
+    <div className="flex flex-col h-full w-full relative">
 
-      {/* Projects */}
-      {projects.length > 0 && (
-        <div>
-          <p className="text-[14px] font-semibold tracking-tight text-[#7a7a7a] mb-2">Projects</p>
-          <div className="flex flex-col gap-2">
-            {projects.map(p => {
-              const s = STATUS_STYLES[p.status]
-              return (
-                <div key={p.id} className="flex items-center gap-4 px-4 py-3 border border-[#e0e0e0] bg-white">
-                  <div className="w-2 h-2 rounded-full" style={{ background: STATUS_STYLES[p.status].dot }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-[#1d1d1f] truncate">{p.name}</p>
-                    {p.description && <p className="text-[11px] text-[#7a7a7a] truncate">{p.description}</p>}
-                  </div>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 ${s.bg} ${s.text}`}>{p.status}</span>
-                  <button onClick={() => removeProject(p.id)}><X size={11} className="text-[#c0c0c0] hover:text-[#1d1d1f]" /></button>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      {/* Breadcrumb / folder navigation */}
+      <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-white border-b border-[#f0f0f0] text-[12px]">
+        <button
+          onClick={() => setCurrentFolderId(null)}
+          className={`font-medium transition-colors ${currentFolderId ? "text-[#7a7a7a] hover:text-[#1d1d1f]" : "text-[#1d1d1f]"}`}
+        >
+          Projects
+        </button>
+        {folderObj && (
+          <>
+            <ChevronRight size={11} className="text-[#c0c0c0]" />
+            <span className="font-medium text-[#1d1d1f]">{folderObj.name}</span>
+          </>
+        )}
 
-      {/* Ideas */}
-      {ideas.length > 0 && (
-        <div>
-          <p className="text-[14px] font-semibold tracking-tight text-[#7a7a7a] mb-2">Ideas</p>
-          <div className="flex flex-col gap-2">
-            {ideas.map(i => (
-              <div key={i.id} className="flex items-center gap-4 px-4 py-3 border border-[#e8d88a]/40 bg-[#fdfbe8]">
-                <Lightbulb size={12} className="text-[#9a8b6e] shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-[#1d1d1f] truncate">{i.title}</p>
-                  {i.description && <p className="text-[11px] text-[#7a7a7a] truncate">{i.description}</p>}
-                </div>
-                <button onClick={() => convertToProject(i)} className="text-[10px] font-medium px-2 py-1 bg-[#1d1d1f] text-white hover:bg-[#2d2d2f] flex items-center gap-1">
-                  <ArrowRight size={9} /> Project
-                </button>
-                <button onClick={() => removeIdea(i.id)}><X size={11} className="text-[#c0c0c0] hover:text-[#1d1d1f]" /></button>
-              </div>
+        {folders.length > 0 && (
+          <div className="flex items-center gap-1 ml-3 border-l border-[#f0f0f0] pl-3">
+            {folders.map(f => (
+              <button key={f.id} onClick={() => setCurrentFolderId(f.id)}
+                className={`px-2.5 py-0.5 text-[11px] border transition-colors ${
+                  currentFolderId === f.id
+                    ? "bg-[#1d1d1f] text-white border-[#1d1d1f]"
+                    : "text-[#7a7a7a] border-[#e0e0e0] hover:border-[#1d1d1f] hover:text-[#1d1d1f]"
+                }`}>{f.name}</button>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {projects.length === 0 && ideas.length === 0 && (
-        <div className="text-center py-16 text-[#7a7a7a]">
-          <FolderOpen size={28} className="mx-auto mb-3 opacity-30" />
-          <p className="text-[13px] font-medium text-[#1d1d1f]">Canvas is empty</p>
-          <p className="text-[12px] mt-1">Add a project or idea to get started.</p>
-        </div>
-      )}
+        {creatingFolder
+          ? <form className="ml-2" onSubmit={e => { e.preventDefault(); createFolder() }}>
+              <input autoFocus value={folderName} onChange={e => setFolderName(e.target.value)}
+                onBlur={createFolder} placeholder="Name…"
+                className="text-[11px] border border-[#c0c0c0] px-2 py-0.5 outline-none w-24" />
+            </form>
+          : <button onClick={() => setCreatingFolder(true)}
+              className="ml-2 flex items-center gap-1 text-[11px] text-[#b0b0b0] hover:text-[#1d1d1f] transition-colors">
+              <FolderPlus size={11} /> New folder
+            </button>}
+      </div>
 
-      {/* Modals */}
-      {adding && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setAdding(null)}>
-          <div className="bg-white shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-[15px] font-semibold text-[#1d1d1f]">New {adding}</h2>
-              <button onClick={() => setAdding(null)}><X size={15} className="text-[#7a7a7a]" /></button>
-            </div>
-            {adding === "project" ? (
-              <div className="flex flex-col gap-3">
-                <input autoFocus value={projectDraft.name} onChange={e => setProjectDraft(d => ({ ...d, name: e.target.value }))}
-                  onKeyDown={e => e.key === "Enter" && addProject()} placeholder="Project name"
-                  className="w-full px-3 py-2 text-[13px] border border-[#e0e0e0] focus:outline-none" />
-                <textarea value={projectDraft.description} onChange={e => setProjectDraft(d => ({ ...d, description: e.target.value }))}
-                  placeholder="Description" rows={3} className="w-full px-3 py-2 text-[12px] border border-[#e0e0e0] focus:outline-none resize-none" />
-                <button onClick={addProject} disabled={!projectDraft.name.trim()}
-                  className="py-2 bg-[#1d1d1f] text-white text-[13px] font-medium disabled:opacity-40">Add</button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <input autoFocus value={ideaDraft.title} onChange={e => setIdeaDraft(d => ({ ...d, title: e.target.value }))}
-                  onKeyDown={e => e.key === "Enter" && addIdea()} placeholder="Idea title"
-                  className="w-full px-3 py-2 text-[13px] border border-[#e0e0e0] focus:outline-none" />
-                <textarea value={ideaDraft.description} onChange={e => setIdeaDraft(d => ({ ...d, description: e.target.value }))}
-                  placeholder="Describe it…" rows={3} className="w-full px-3 py-2 text-[12px] border border-[#e0e0e0] focus:outline-none resize-none" />
-                <button onClick={addIdea} disabled={!ideaDraft.title.trim()}
-                  className="py-2 bg-[#1d1d1f] text-white text-[13px] font-medium disabled:opacity-40">Add</button>
-              </div>
+      {/* Zoom controls */}
+      <div className="absolute top-12 right-3 z-20 flex flex-col gap-1">
+        <button onClick={() => setZoom(z => Math.min(2.5, z + 0.2))} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><ZoomIn size={11} className="text-[#7a7a7a]" /></button>
+        <button onClick={() => setZoom(z => Math.max(0.3, z - 0.2))} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><ZoomOut size={11} className="text-[#7a7a7a]" /></button>
+        <button onClick={() => { setZoom(1); setPan({ x: 80, y: 60 }) }} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><Maximize2 size={11} className="text-[#7a7a7a]" /></button>
+      </div>
+
+      {/* Canvas */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-hidden relative bg-[#fafafa]"
+        style={{ cursor: mode === "draw" ? "crosshair" : mode === "arrow" ? "cell" : isPanning ? "grabbing" : "default" }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onMouseDown={onCanvasDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+      >
+        {/* Dot grid */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          backgroundImage: "radial-gradient(circle, #d0d0d0 1px, transparent 1px)",
+          backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
+          backgroundPosition: `${pan.x % (24 * zoom)}px ${pan.y % (24 * zoom)}px`,
+        }} />
+
+        {/* Canvas transform */}
+        <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "0 0", transform: `translate(${pan.x}px,${pan.y}px) scale(${zoom})` }}>
+
+          {/* SVG: connections + drawing strokes */}
+          <svg className="absolute overflow-visible pointer-events-none"
+            style={{ left: -5000, top: -5000, width: 10000, height: 10000 }}>
+            <defs>
+              <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                <polygon points="0 0,8 3,0 6" fill="#a0a0b0" />
+              </marker>
+            </defs>
+
+            {/* Strokes */}
+            {visibleStrokes.map(s => (
+              <path key={s.id} d={s.path} stroke="#5a5aaa" strokeWidth={2 / zoom} fill="none"
+                strokeLinecap="round" strokeLinejoin="round" opacity={0.55} />
+            ))}
+            {liveStroke && (
+              <path d={liveStroke} stroke="#5a5aaa" strokeWidth={2 / zoom} fill="none"
+                strokeLinecap="round" strokeLinejoin="round" opacity={0.55} />
             )}
-          </div>
+
+            {/* Connection arrows */}
+            {visibleConns.map(conn => {
+              const from = blocks.find(b => b.id === conn.fromId)
+              const to   = blocks.find(b => b.id === conn.toId)
+              if (!from || !to) return null
+              const [x1, y1] = blockCenter(from)
+              const [x2, y2] = blockCenter(to)
+              const dx = (x2 - x1) * 0.5
+              const d = `M ${x1} ${y1} C ${x1 + dx} ${y1},${x2 - dx} ${y2},${x2} ${y2}`
+              return (
+                <g key={conn.id}>
+                  <path d={d} stroke="#c0bdb8" strokeWidth={1.5 / zoom} fill="none" markerEnd="url(#ah)" />
+                  {/* Transparent wider hit area for deletion */}
+                  <path d={d} stroke="transparent" strokeWidth={10 / zoom} fill="none"
+                    style={{ pointerEvents: "auto", cursor: "pointer" }}
+                    onClick={() => mutateConns(connections.filter(c => c.id !== conn.id))} />
+                </g>
+              )
+            })}
+          </svg>
+
+          {/* Blocks */}
+          {visibleBlocks.map(block => {
+            const isEditing = editingId === block.id
+            const isFrom    = arrowFrom === block.id
+            return (
+              <div key={block.id} data-block="true" className="group"
+                style={{
+                  position: "absolute", left: block.x, top: block.y, zIndex: isEditing ? 10 : 1,
+                  outline: isFrom ? "2px dashed #7070c0" : undefined, outlineOffset: 4,
+                }}
+                onMouseDown={e => onCardDown(e, block.id)}
+              >
+                <div
+                  style={{ outline: isEditing ? "2px solid #2c4470" : "none", outlineOffset: 2 }}
+                  onDoubleClick={() => !isEditing && mode === "select" && setEditingId(block.id)}
+                >
+                  {block.type === "title"   && <TitleBlock   block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                  {block.type === "note"    && <NoteBlock    block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                  {block.type === "image"   && <ImageBlock   block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                  {block.type === "idea"    && <IdeaBlock    block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                  {block.type === "project" && <ProjectBlock block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                </div>
+
+                {/* Delete */}
+                <div className="absolute -top-2.5 -right-2.5 z-20 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onMouseDown={e => { e.stopPropagation(); removeBlock(block.id) }}>
+                  <div className="w-5 h-5 rounded-full bg-[#1d1d1f] flex items-center justify-center cursor-pointer hover:bg-red-600 transition-colors">
+                    <X size={9} className="text-white" />
+                  </div>
+                </div>
+
+                {/* Resize handle */}
+                {mode === "select" && block.type !== "title" && (
+                  <div className="absolute bottom-0 right-0 w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize flex items-end justify-end p-0.5"
+                    onMouseDown={e => onResizeDown(e, block)}>
+                    <svg viewBox="0 0 8 8" width="8" height="8">
+                      <path d="M8 2L8 8L2 8" stroke="#b0b0b0" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
-      )}
+
+        {/* Empty state */}
+        {visibleBlocks.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <p className="text-[14px] text-[#b8b8b8] font-medium">
+              {folderObj ? `${folderObj.name} is empty` : "Add blocks from the toolbar below"}
+            </p>
+          </div>
+        )}
+
+        {/* Mode hint pill */}
+        {mode !== "select" && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-[#1d1d1f] text-white text-[11px] px-3 py-1.5 rounded-full pointer-events-none select-none">
+            {mode === "draw"  && "Draw freely · click Draw again to exit"}
+            {mode === "arrow" && (arrowFrom ? "Click another block to connect" : "Click a block to start an arrow")}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom toolbar */}
+      <div className="shrink-0 flex items-center justify-center gap-2 py-3 bg-white border-t border-[#e8e8e8]">
+        {/* Block types */}
+        <div className="flex items-center gap-1 bg-[#f5f5f7] p-1 rounded-xl">
+          {([
+            { type: "title"   as BlockType, icon: <AlignLeft size={14} />, label: "Title"   },
+            { type: "note"    as BlockType, icon: <Type size={14} />,       label: "Note"    },
+            { type: "image"   as BlockType, icon: <ImageIcon size={14} />,  label: "Image"   },
+            { type: "idea"    as BlockType, icon: <Lightbulb size={14} />,  label: "Idea"    },
+            { type: "project" as BlockType, icon: <FolderOpen size={14} />, label: "Project" },
+          ] as const).map(({ type, icon, label }) => (
+            <button key={type}
+              onClick={() => { setMode("select"); setArrowFrom(null); addBlock(type) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-[#1d1d1f] hover:bg-white hover:shadow-sm transition-all">
+              <span className="text-[#7a7a7a]">{icon}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tools */}
+        <div className="flex items-center gap-1 bg-[#f5f5f7] p-1 rounded-xl">
+          <button
+            onClick={() => { setMode(m => m === "draw" ? "select" : "draw"); setArrowFrom(null) }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${mode === "draw" ? "bg-white shadow-sm text-[#1d1d1f]" : "text-[#7a7a7a] hover:bg-white hover:shadow-sm"}`}>
+            <Pencil size={14} /> Draw
+          </button>
+          <button
+            onClick={() => { setMode(m => m === "arrow" ? "select" : "arrow"); setArrowFrom(null) }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${mode === "arrow" ? "bg-white shadow-sm text-[#1d1d1f]" : "text-[#7a7a7a] hover:bg-white hover:shadow-sm"}`}>
+            <Link2 size={14} /> Arrow
+          </button>
+          {visibleStrokes.length > 0 && (
+            <button
+              onClick={() => mutateStrokes(strokes.filter(s => s.folderId !== currentFolderId))}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-[#7a7a7a] hover:bg-white hover:shadow-sm transition-all">
+              <Eraser size={14} /> Clear ink
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
-import { BarChart2, Mail, FileText, Cpu, MessageSquare, CalendarDays, Archive, UserRound, Building2, Briefcase, FolderOpen } from "lucide-react"
+import { BarChart2, Mail, FileText, Cpu, MessageSquare, CalendarDays, Archive, UserRound, Briefcase, FolderOpen } from "lucide-react"
 import Summary from "@/components/sections/Summary"
 import EmailInbox from "@/components/sections/EmailInbox"
 import Documents from "@/components/sections/Documents"
@@ -11,7 +11,6 @@ import Contacts from "@/components/sections/Contacts"
 import Chat from "@/components/sections/Chat"
 import Collection from "@/components/sections/Collection"
 import People from "@/components/sections/People"
-import Organizations from "@/components/sections/Organizations"
 import Opportunities from "@/components/sections/Opportunities"
 import Projects from "@/components/sections/Projects"
 import RightPanel from "@/components/RightPanel"
@@ -28,13 +27,12 @@ const WORKSPACE_NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
 
 const ARCHIVE_NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "collection",    label: "Collection",    icon: <Archive size={15} /> },
-  { id: "people",        label: "People",        icon: <UserRound size={15} /> },
-  { id: "organizations", label: "Organizations", icon: <Building2 size={15} /> },
-  { id: "opportunities", label: "Opportunities", icon: <Briefcase size={15} /> },
   { id: "projects",      label: "Projects",      icon: <FolderOpen size={15} /> },
+  { id: "opportunities", label: "Opportunities", icon: <Briefcase size={15} /> },
+  { id: "people",        label: "People",        icon: <UserRound size={15} /> },
 ]
 
-const ARCHIVE_SECTIONS: Section[] = ["collection", "people", "organizations", "opportunities", "projects"]
+const ARCHIVE_SECTIONS: Section[] = ["collection", "projects", "opportunities", "people"]
 
 const PAGE_TITLES: Partial<Record<Section, string>> = {
   agents:        "AI Agents",
@@ -42,7 +40,6 @@ const PAGE_TITLES: Partial<Record<Section, string>> = {
   contacts:      "Contacts",
   upload:        "Documents",
   people:        "People",
-  organizations: "Organizations",
   opportunities: "Opportunities",
   projects:      "Projects",
 }
@@ -105,7 +102,7 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className="flex flex-col w-[220px] shrink-0 border-r pt-4 pb-6 bg-[#f5f5f7] overflow-y-auto">
-        <p className="px-4 pb-4 text-[14px] font-semibold tracking-tight text-[#1d1d1f]">Enterprise Agent</p>
+        <p className="px-4 pb-4 text-[14px] font-semibold tracking-tight text-[#1d1d1f]">Zayneb's Workspace</p>
 
         {/* Workspace group */}
         <p className="px-4 pb-1 text-[14px] font-semibold tracking-tight text-[#7a7a7a]">Workspace</p>
@@ -165,7 +162,6 @@ export default function App() {
               {section === "agents"        && <Agents />}
               {section === "upload"        && <Documents />}
               {section === "people"        && <People />}
-              {section === "organizations" && <Organizations />}
               {section === "opportunities" && <Opportunities />}
               {/* EmailInbox stays mounted so it loads once */}
               <div className={section === "email" ? undefined : "hidden"}>

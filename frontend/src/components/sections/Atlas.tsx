@@ -118,8 +118,8 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
 
   const svgRef       = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const animRef      = useRef<number>()
-  const hideTimer    = useRef<ReturnType<typeof setTimeout>>()
+  const animRef      = useRef<number | undefined>(undefined)
+  const hideTimer    = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Re-init when item count changes
   useEffect(() => {
