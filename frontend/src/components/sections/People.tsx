@@ -81,47 +81,51 @@ function MiniCalendar({
   return (
     <div className="select-none">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <button onClick={onPrev} className="p-1 hover:text-[#1d1d1f] text-[#7a7a7a] transition-colors">
-          <ChevronLeft size={14} />
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={onPrev} className="p-1.5 hover:text-[#1d1d1f] text-[#7a7a7a] transition-colors">
+          <ChevronLeft size={16} />
         </button>
-        <span className="text-[12px] font-semibold text-[#1d1d1f]">
+        <span className="text-[14px] font-semibold text-[#1d1d1f]">
           {MONTH_NAMES[month]} {year}
         </span>
-        <button onClick={onNext} className="p-1 hover:text-[#1d1d1f] text-[#7a7a7a] transition-colors">
-          <ChevronRight size={14} />
+        <button onClick={onNext} className="p-1.5 hover:text-[#1d1d1f] text-[#7a7a7a] transition-colors">
+          <ChevronRight size={16} />
         </button>
       </div>
 
       {/* Day headers */}
-      <div className="grid grid-cols-7 mb-1">
+      <div className="grid grid-cols-7 mb-2">
         {DAY_NAMES.map(d => (
-          <div key={d} className="text-center text-[10px] font-medium text-[#b0b0b0] py-0.5">{d}</div>
+          <div key={d} className="text-center text-[11px] font-medium text-[#b0b0b0] py-1">{d}</div>
         ))}
       </div>
 
       {/* Cells */}
-      <div className="grid grid-cols-7 gap-y-0.5">
+      <div className="grid grid-cols-7 gap-y-1">
         {cells.map((d, i) => {
           if (!d) return <div key={`e-${i}`} />
           const dateStr = padDate(year, month, d)
-          const hasEvents = events.some(e => e.date === dateStr)
+          const dayEvts = events.filter(e => e.date === dateStr)
+          const hasEvents = dayEvts.length > 0
           const isToday = dateStr === todayStr
           const isSelected = dateStr === selected
           return (
             <button
               key={dateStr}
               onClick={() => onSelectDay(dateStr)}
-              className={`flex flex-col items-center py-0.5 rounded transition-colors ${
+              className={`flex flex-col items-center rounded-lg transition-colors ${
                 isSelected ? "bg-[#1d1d1f] text-white" :
                 isToday    ? "bg-[#f0f0f0] text-[#1d1d1f]" :
                              "hover:bg-[#f5f5f7] text-[#1d1d1f]"
               }`}
+              style={{ minHeight: 40 }}
             >
-              <span className="text-[11px] leading-none py-1">{d}</span>
-              {hasEvents && (
-                <span className={`w-1 h-1 rounded-full mt-0.5 ${isSelected ? "bg-white/70" : "bg-[#b08a8a]"}`} />
-              )}
+              <span className="text-[12px] font-medium pt-2 leading-none">{d}</span>
+              <span className="flex-1 flex items-end justify-center pb-1.5 gap-0.5">
+                {hasEvents && (
+                  <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white/70" : "bg-[#b08a8a]"}`} />
+                )}
+              </span>
             </button>
           )
         })}
@@ -409,8 +413,8 @@ export default function People() {
       </div>
 
       {/* ── Right: calendar panel ─────────────────────────────────── */}
-      <div className="w-56 shrink-0 flex flex-col gap-4">
-        <div className="bg-white rounded-2xl border border-[#e0e0e0] p-4">
+      <div className="w-64 shrink-0 flex flex-col gap-4">
+        <div className="bg-white p-4">
           <MiniCalendar
             year={calYear} month={calMonth} events={calEvents} selected={selDay}
             onPrev={() => { if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11) } else setCalMonth(m => m - 1) }}
@@ -421,7 +425,7 @@ export default function People() {
 
         {/* Events for selected day */}
         {selDay && (
-          <div className="bg-white rounded-2xl border border-[#e0e0e0] p-4 flex-1 overflow-y-auto">
+          <div className="bg-white p-4 flex-1 overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7a7a7a]">
                 {new Date(selDay + "T12:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}

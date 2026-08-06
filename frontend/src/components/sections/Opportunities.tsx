@@ -147,8 +147,8 @@ export default function Opportunities() {
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Kanban */}
         <div className="flex gap-3 flex-1 overflow-auto">
-          {COLUMNS.filter(c => c !== "Archived").map(col => (
-            <div key={col} className="flex flex-col gap-2 w-52 shrink-0">
+          {COLUMNS.map(col => (
+            <div key={col} className={`flex flex-col gap-2 shrink-0 ${col === "Archived" ? "w-44 opacity-70" : "w-52"}`}>
               <div className="flex items-center gap-2 mb-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${STATUS_STYLES[col].dot}`} />
                 {editingCol === col ? (

@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
-  AlignLeft, Type, Image as ImageIcon, Lightbulb, FolderOpen,
+  AlignLeft, AlignCenter, AlignRight,
+  Type, Image as ImageIcon, Lightbulb, FolderOpen,
   X, ZoomIn, ZoomOut, Maximize2, Upload, Pencil, Eraser,
   Link2, ChevronRight, FolderPlus,
 } from "lucide-react"
@@ -23,6 +24,7 @@ interface Block {
   x: number; y: number; w?: number; h?: number
   folderId?: string | null
   content?: string
+  align?: "left" | "center" | "right"
   imageUrl?: string; caption?: string
   title?: string; body?: string
   name?: string; status?: ProjectStatus; desc?: string; tags?: string
@@ -92,22 +94,48 @@ function TitleBlock({ block, editing, onEdit, onChange }: {
   )
 }
 
+const ALIGN_OPTS = [
+  { a: "left"   as const, icon: <AlignLeft   size={11} /> },
+  { a: "center" as const, icon: <AlignCenter size={11} /> },
+  { a: "right"  as const, icon: <AlignRight  size={11} /> },
+]
+
 function NoteBlock({ block, editing, onEdit, onChange }: {
   block: Block; editing: boolean; onEdit: () => void; onChange: (p: Partial<Block>) => void
 }) {
+  const align = block.align ?? "left"
+  const ta = { textAlign: align } as React.CSSProperties
+  const ac = align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"
+
   return (
     <div className="bg-white select-none" style={{ ...SH, width: block.w ?? 260, minHeight: block.h ?? 72 }}>
       <div className="px-4 py-3">
         {editing
           ? <InlineText value={block.content ?? ""} onChange={v => onChange({ content: v })}
-              placeholder="Write in markdown…" className="text-[13px] text-[#1d1d1f] leading-[1.7]" multiline />
-          : <div className="cursor-text min-h-[48px]" onClick={onEdit}>
+              placeholder="Write in markdown…" className={`text-[13px] text-[#1d1d1f] leading-[1.7] ${ac}`} multiline />
+          : <div className="cursor-text min-h-[48px]" style={ta} onClick={onEdit}>
               {block.content
-                ? <div className="text-[13px] leading-[1.7] text-[#1d1d1f] [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_strong]:font-semibold [&_em]:italic [&_code]:bg-[#f0f0f0] [&_code]:px-1 [&_code]:rounded [&_code]:text-[12px] [&_p]:mb-0.5">
+                ? <div className={`text-[13px] leading-[1.7] text-[#1d1d1f] [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_strong]:font-semibold [&_em]:italic [&_code]:bg-[#f0f0f0] [&_code]:px-1 [&_code]:rounded [&_code]:text-[12px] [&_p]:mb-0.5 ${ac}`}>
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
                   </div>
                 : <p className="text-[#c0c0c0] text-[13px]">Click to write…</p>}
             </div>}
+      </div>
+
+      {/* Alignment toolbar — visible on hover */}
+      <div
+        className="hidden group-hover:flex items-center justify-center gap-0.5 px-3 pb-2 border-t border-[#f4f4f4] pt-1.5"
+        onMouseDown={e => e.stopPropagation()}
+      >
+        {ALIGN_OPTS.map(({ a, icon }) => (
+          <button
+            key={a}
+            onClick={() => onChange({ align: a })}
+            className={`p-1.5 rounded transition-colors ${align === a ? "bg-[#e8e8e8] text-[#1d1d1f]" : "text-[#c0c0c0] hover:text-[#7a7a7a] hover:bg-[#f0f0f0]"}`}
+          >
+            {icon}
+          </button>
+        ))}
       </div>
     </div>
   )
@@ -337,7 +365,7 @@ export default function Projects() {
         setArrowFrom(id)
       } else if (arrowFrom !== id) {
         mutateConns([...connections, { id: uid(), fromId: arrowFrom, toId: id, folderId: currentFolderId }])
-        setArrowFrom(null); setMode("select")
+        setArrowFrom(null)  // stay in arrow mode; user exits via toolbar
       }
       return
     }
@@ -492,7 +520,7 @@ export default function Projects() {
               <div key={block.id} data-block="true" className="group"
                 style={{
                   position: "absolute", left: block.x, top: block.y, zIndex: isEditing ? 10 : 1,
-                  outline: isFrom ? "2px dashed #7070c0" : undefined, outlineOffset: 4,
+                  outline: isFrom ? "2px dashed #7070c0" : undefined, outlineOffset: "4px",
                 }}
                 onMouseDown={e => onCardDown(e, block.id)}
               >
@@ -500,11 +528,11 @@ export default function Projects() {
                   style={{ outline: isEditing ? "2px solid #2c4470" : "none", outlineOffset: 2 }}
                   onDoubleClick={() => !isEditing && mode === "select" && setEditingId(block.id)}
                 >
-                  {block.type === "title"   && <TitleBlock   block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
-                  {block.type === "note"    && <NoteBlock    block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
-                  {block.type === "image"   && <ImageBlock   block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
-                  {block.type === "idea"    && <IdeaBlock    block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
-                  {block.type === "project" && <ProjectBlock block={block} editing={isEditing} onEdit={() => setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                  {block.type === "title"   && <TitleBlock   block={block} editing={isEditing} onEdit={() => mode === "select" && setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                  {block.type === "note"    && <NoteBlock    block={block} editing={isEditing} onEdit={() => mode === "select" && setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                  {block.type === "image"   && <ImageBlock   block={block} editing={isEditing} onEdit={() => mode === "select" && setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                  {block.type === "idea"    && <IdeaBlock    block={block} editing={isEditing} onEdit={() => mode === "select" && setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
+                  {block.type === "project" && <ProjectBlock block={block} editing={isEditing} onEdit={() => mode === "select" && setEditingId(block.id)} onChange={p => patch(block.id, p)} />}
                 </div>
 
                 {/* Delete */}
