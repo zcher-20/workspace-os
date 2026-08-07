@@ -29,7 +29,7 @@ const ARCHIVE_NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "collection",    label: "Collection",    icon: <Archive size={15} /> },
   { id: "projects",      label: "Projects",      icon: <FolderOpen size={15} /> },
   { id: "opportunities", label: "Opportunities", icon: <Briefcase size={15} /> },
-  { id: "people",        label: "People",        icon: <UserRound size={15} /> },
+  { id: "people",        label: "Network",       icon: <UserRound size={15} /> },
 ]
 
 const ARCHIVE_SECTIONS: Section[] = ["collection", "projects", "opportunities", "people"]
@@ -39,7 +39,7 @@ const PAGE_TITLES: Partial<Record<Section, string>> = {
   email:         "Email Inbox",
   contacts:      "Contacts",
   upload:        "Documents",
-  people:        "People",
+  people:        "People, Organizations, & Events",
   opportunities: "Opportunities",
   projects:      "Projects",
 }
@@ -88,9 +88,10 @@ export default function App() {
 
   const isChat = section === "chat"
   const isArchive = ARCHIVE_SECTIONS.includes(section)
-  const isCollection = section === "collection"
-  const isProjects = section === "projects"
-  const isFullBleed = isCollection || isProjects
+  const isCollection    = section === "collection"
+  const isProjects      = section === "projects"
+  const isOpportunities = section === "opportunities"
+  const isFullBleed     = isCollection || isProjects || isOpportunities
 
   const pageTitle = section === "summary"
     ? `${greeting()}${userName ? `, ${userName}` : ""}`
@@ -101,7 +102,7 @@ export default function App() {
       <CommandPalette />
 
       {/* Sidebar */}
-      <aside className="flex flex-col w-[220px] shrink-0 border-r pt-4 pb-6 bg-[#f5f5f7] overflow-y-auto">
+      <aside className="flex flex-col w-[220px] shrink-0 border-r pt-4 pb-6 bg-[#f5f5f7] overflow-hidden">
         <p className="px-4 pb-4 text-[14px] font-semibold tracking-tight text-[#1d1d1f]">Zayneb's Workspace</p>
 
         {/* Workspace group */}
@@ -151,8 +152,9 @@ export default function App() {
           <Chat />
         ) : isFullBleed ? (
           <div className="flex flex-1 min-h-0 overflow-hidden">
-            {isCollection && <Collection />}
-            {isProjects   && <Projects />}
+            {isCollection    && <Collection />}
+            {isProjects      && <Projects />}
+            {isOpportunities && <Opportunities />}
           </div>
         ) : (
           <ScrollArea className="flex-1">
@@ -162,7 +164,7 @@ export default function App() {
               {section === "agents"        && <Agents />}
               {section === "upload"        && <Documents />}
               {section === "people"        && <People />}
-              {section === "opportunities" && <Opportunities />}
+              {/* Opportunities is full-bleed — rendered above */}
               {/* EmailInbox stays mounted so it loads once */}
               <div className={section === "email" ? undefined : "hidden"}>
                 <EmailInbox />

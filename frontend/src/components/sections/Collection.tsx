@@ -254,7 +254,7 @@ export default function Collection() {
     <div className="flex h-full w-full">
 
       {/* ── Left: Visual board ── */}
-      <div className="flex flex-col w-[460px] shrink-0 border-r border-[#e0e0e0] overflow-hidden">
+      <div className="flex flex-col w-[560px] shrink-0 border-r border-[#e0e0e0] overflow-hidden">
 
         {/* Toolbar */}
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#e0e0e0] bg-white shrink-0">
