@@ -326,10 +326,10 @@ function Timeline() {
             const linkShort = opp.link ? shortLink(opp.link) : ""
 
             return (
-              <div key={opp.id} style={{ position: "relative", height: isEditing ? 100 : 72 }}>
+              <div key={opp.id} style={{ position: "relative", height: isEditing ? 100 : 52 }}>
                 <div
                   ref={el => { if (el) barRefs.current.set(opp.id, el); else barRefs.current.delete(opp.id) }}
-                  style={{ position: "absolute", left: cl, width: bw, top: 8, bottom: 8, zIndex: isEditing ? 10 : 2, cursor: isEditing ? "default" : "grab" }}
+                  style={{ position: "absolute", left: cl, width: bw, top: 5, bottom: 5, zIndex: isEditing ? 10 : 2, cursor: isEditing ? "default" : "grab" }}
                   onMouseDown={e => {
                     if (isEditing) return
                     const el = barRefs.current.get(opp.id)
@@ -385,10 +385,10 @@ function Timeline() {
                         <X size={10} className="text-[#c0c0c0] hover:text-red-400" />
                       </button>
 
-                      <div className="h-full flex items-center gap-2.5 px-4 pr-8">
-                        <OppLogo opp={opp} size={22} />
-                        <div className="flex flex-col justify-center min-w-0 flex-1 gap-1">
-                          <span className="text-[13px] font-semibold text-[#1d1d1f] leading-tight truncate">{name}</span>
+                      <div className="h-full flex items-center gap-2 px-3 pr-7">
+                        <OppLogo opp={opp} size={18} />
+                        <div className="flex flex-col justify-center min-w-0 flex-1 gap-0.5">
+                          <span className="text-[12px] font-semibold text-[#1d1d1f] leading-tight truncate">{name}</span>
                           <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
                             {dateStr && <span className="text-[11px] text-[#a0a0a0] whitespace-nowrap shrink-0">{dateStr}</span>}
                             {dateStr && linkShort && <span className="text-[11px] text-[#d0d0d0] shrink-0">·</span>}
