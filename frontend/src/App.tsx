@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { pullFromSupabase } from "@/lib/db"
+import { pullFromSupabase, pullIDBFromSupabase } from "@/lib/db"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
@@ -83,6 +83,7 @@ export default function App() {
     if (synced.current) return
     synced.current = true
     pullFromSupabase().then(() => setSection(s => s)) // trigger re-render
+    pullIDBFromSupabase() // restore images into IndexedDB
   }, [])
 
   useEffect(() => {

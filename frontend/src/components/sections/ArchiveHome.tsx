@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Pencil, Upload, Move } from "lucide-react"
-import { pushToSupabase } from "@/lib/db"
+import { pushToSupabase, idbSave, idbLoad } from "@/lib/db"
 import { TasksContent } from "@/components/sections/Tasks"
 
 function navigate(section: string) {
@@ -11,40 +11,6 @@ function ld<T>(k: string, d: T): T {
   try { return JSON.parse(localStorage.getItem(k) || "null") ?? d } catch { return d }
 }
 function sv(k: string, v: unknown) { localStorage.setItem(k, JSON.stringify(v)) }
-
-// ── IndexedDB image store (no size limits unlike localStorage) ────────
-
-const IDB_NAME  = "archive-os-images"
-const IDB_STORE = "imgs"
-
-function openIDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1)
-    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE)
-    req.onsuccess = () => resolve(req.result)
-    req.onerror   = () => reject(req.error)
-  })
-}
-
-async function idbSave(key: string, data: string): Promise<void> {
-  const db = await openIDB()
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, "readwrite")
-    tx.objectStore(IDB_STORE).put(data, key)
-    tx.oncomplete = () => resolve()
-    tx.onerror    = () => reject(tx.error)
-  })
-}
-
-async function idbLoad(key: string): Promise<string | null> {
-  const db = await openIDB()
-  return new Promise((resolve, reject) => {
-    const tx  = db.transaction(IDB_STORE, "readonly")
-    const req = tx.objectStore(IDB_STORE).get(key)
-    req.onsuccess = () => resolve((req.result as string) ?? null)
-    req.onerror   = () => reject(req.error)
-  })
-}
 
 // ── Image compression ─────────────────────────────────────────────────
 
@@ -101,6 +67,7 @@ function useImageUpload(storageKey: string) {
     if (!data) return
     setImg(data)
     idbSave(storageKey, data).catch(err => console.warn("IDB save failed:", err))
+    pushToSupabase(storageKey, data)
   }
 
   return { img, trigger, inputRef, onChange }
