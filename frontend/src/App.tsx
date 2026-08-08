@@ -170,7 +170,7 @@ export default function App() {
         {/* Hover flyout when sidebar is collapsed */}
         {!sidebarOpen && sidebarHovered && (
           <div
-            className="absolute left-12 top-0 z-50 bg-white border border-[#f0f0f0] shadow-lg rounded-r-xl pt-10 pb-6 px-5 flex flex-col gap-0.5 min-w-[160px]"
+            className="absolute left-12 top-0 z-50 bg-white border border-[#f0f0f0] shadow-md rounded-lg pt-4 pb-4 px-4 flex flex-col min-w-[160px]"
             onMouseEnter={() => setSidebarHovered(true)}
             onMouseLeave={() => setSidebarHovered(false)}
           >
@@ -178,7 +178,7 @@ export default function App() {
               <button
                 key={n.id}
                 onClick={() => { setSection(n.id); setSidebarHovered(false) }}
-                className="flex items-center gap-3 py-1.5 group/item text-left"
+                className="flex items-center gap-3 py-1 group/item text-left"
               >
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${section === n.id ? "bg-[#1d1d1f]" : "bg-[#d0d0d0] group-hover/item:bg-[#1d1d1f]"}`} />
                 <span className={`text-[12px] leading-tight transition-colors ${section === n.id ? "text-[#1d1d1f] font-medium" : "text-[#7a7a7a] group-hover/item:text-[#1d1d1f]"}`}>{n.label}</span>
