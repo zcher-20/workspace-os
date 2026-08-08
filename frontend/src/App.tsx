@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { pullFromSupabase } from "@/lib/db"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
@@ -74,6 +75,15 @@ export default function App() {
   const [section, setSection] = useState<Section>("archive-home")
   const [userName, setUserName] = useState("")
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const synced = useRef(false)
+
+  // Pull latest data from Supabase into localStorage on first load,
+  // then force a re-render so components pick up the fresh data.
+  useEffect(() => {
+    if (synced.current) return
+    synced.current = true
+    pullFromSupabase().then(() => setSection(s => s)) // trigger re-render
+  }, [])
 
   useEffect(() => {
     fetch("/api/email/status")

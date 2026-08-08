@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Pencil, Upload, Move } from "lucide-react"
+import { pushToSupabase } from "@/lib/db"
 import { TasksContent } from "@/components/sections/Tasks"
 
 function navigate(section: string) {
@@ -293,7 +294,7 @@ export default function ArchiveHome() {
                 <input
                   autoFocus
                   value={name}
-                  onChange={e => { setName(e.target.value); sv(LS_NAME, e.target.value) }}
+                  onChange={e => { setName(e.target.value); sv(LS_NAME, e.target.value); pushToSupabase(LS_NAME, e.target.value) }}
                   onBlur={() => setEditName(false)}
                   onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") setEditName(false) }}
                   className="text-[28px] font-light tracking-tight text-[#1d1d1f] outline-none border-b border-[#c0c0c0] text-right bg-transparent w-72"
@@ -308,7 +309,7 @@ export default function ArchiveHome() {
                 <input
                   autoFocus
                   value={role}
-                  onChange={e => { setRole(e.target.value); sv(LS_ROLE, e.target.value) }}
+                  onChange={e => { setRole(e.target.value); sv(LS_ROLE, e.target.value); pushToSupabase(LS_ROLE, e.target.value) }}
                   onBlur={() => setEditRole(false)}
                   onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") setEditRole(false) }}
                   className="text-[12px] text-[#7a7a7a] outline-none border-b border-[#e0e0e0] text-right bg-transparent w-64 mt-1"

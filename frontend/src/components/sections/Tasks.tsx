@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { X, Check, ExternalLink, ChevronLeft, ChevronRight, ArrowUpRight } from "lucide-react"
+import { pushToSupabase } from "@/lib/db"
 
 // ── Opportunities (shared via localStorage) ───────────────────────
 type OppStatus = "Exploring" | "Applying" | "Interview" | "Offer" | "Archived"
@@ -17,13 +18,13 @@ const STATUS_COLORS: Record<OppStatus, { dot: string; bg: string; text: string }
 function loadOpps(): Opportunity[] {
   try { return JSON.parse(localStorage.getItem("workspace:opportunities") || "[]") } catch { return [] }
 }
-function saveOpps(o: Opportunity[]) { localStorage.setItem("workspace:opportunities", JSON.stringify(o)) }
+function saveOpps(o: Opportunity[]) { localStorage.setItem("workspace:opportunities", JSON.stringify(o)); pushToSupabase("workspace:opportunities", o) }
 
 const LS_HIDDEN = "workspace:timeline-hidden"
 function loadHidden(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(LS_HIDDEN) || "[]") as string[]) } catch { return new Set() }
 }
-function saveHidden(h: Set<string>) { localStorage.setItem(LS_HIDDEN, JSON.stringify([...h])) }
+function saveHidden(h: Set<string>) { const v = [...h]; localStorage.setItem(LS_HIDDEN, JSON.stringify(v)); pushToSupabase(LS_HIDDEN, v) }
 
 const AVATAR_COLORS = ["#8b3a3a", "#524470", "#3d6060", "#723048", "#685840", "#7a5540", "#2c4470"]
 function avatarBg(str: string) {
@@ -495,7 +496,7 @@ interface Task {
 type WeekData = Record<string, Task[]>
 
 function loadData(): WeekData { try { return JSON.parse(localStorage.getItem(LS_KEY) || "null") ?? {} } catch { return {} } }
-function saveData(d: WeekData) { localStorage.setItem(LS_KEY, JSON.stringify(d)) }
+function saveData(d: WeekData) { localStorage.setItem(LS_KEY, JSON.stringify(d)); pushToSupabase(LS_KEY, d) }
 function isUrl(t: string) { if (!t.startsWith("http://") && !t.startsWith("https://")) return false; try { new URL(t); return true } catch { return false } }
 function faviconUrl(url: string) { try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32` } catch { return "" } }
 

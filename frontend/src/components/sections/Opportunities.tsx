@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react"
 import { Plus, X, Clock, Search, ExternalLink, Pencil, ChevronUp, CheckCircle2, Circle } from "lucide-react"
+import { pushToSupabase } from "@/lib/db"
 
 type Status = "Exploring" | "Applying" | "Interview" | "Offer" | "Archived"
 const COLUMNS: Status[] = ["Exploring", "Applying", "Interview", "Offer", "Archived"]
@@ -24,7 +25,7 @@ interface Opportunity {
 
 const LS_KEY = "workspace:opportunities"
 function load(): Opportunity[] { try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]") } catch { return [] } }
-function save(o: Opportunity[]) { localStorage.setItem(LS_KEY, JSON.stringify(o)) }
+function save(o: Opportunity[]) { localStorage.setItem(LS_KEY, JSON.stringify(o)); pushToSupabase(LS_KEY, o) }
 
 function formatDate(iso: string) {
   if (!iso) return ""
