@@ -75,15 +75,17 @@ export default function App() {
   const [section, setSection] = useState<Section>("archive-home")
   const [userName, setUserName] = useState("")
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [syncDone, setSyncDone] = useState(false)
   const synced = useRef(false)
 
-  // Pull latest data from Supabase into localStorage on first load,
-  // then force a re-render so components pick up the fresh data.
+  // Pull from Supabase first, then render content so components
+  // initialize their useState from freshly-populated storage.
   useEffect(() => {
     if (synced.current) return
     synced.current = true
-    pullFromSupabase().then(() => setSection(s => s)) // trigger re-render
-    pullIDBFromSupabase() // restore images into IndexedDB
+    Promise.all([pullFromSupabase(), pullIDBFromSupabase()])
+      .catch(() => {})
+      .finally(() => setSyncDone(true))
   }, [])
 
   useEffect(() => {
@@ -175,7 +177,11 @@ export default function App() {
           </div>
         )}
 
-        {isChat ? (
+        {!syncDone ? (
+          <div className="flex-1 flex items-center justify-center">
+            <span className="text-[11px] text-[#c0c0c0]">Syncing…</span>
+          </div>
+        ) : isChat ? (
           <Chat />
         ) : isFullBleed ? (
           <div className="flex flex-1 min-h-0 overflow-hidden">
