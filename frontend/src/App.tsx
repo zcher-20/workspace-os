@@ -123,7 +123,7 @@ export default function App() {
       <CommandPalette />
 
       {/* Sidebar */}
-      <aside className={`flex flex-col shrink-0 border-r pb-6 bg-[#f5f5f7] overflow-hidden transition-all duration-200 ${sidebarOpen ? "w-[220px] pt-4" : "w-12 pt-4 items-center"}`}>
+      <aside className={`flex flex-col shrink-0 border-r pb-6 bg-white overflow-hidden transition-all duration-200 ${sidebarOpen ? "w-[220px] pt-4" : "w-12 pt-4 items-center"}`}>
         {sidebarOpen ? (
           <div className="flex items-center justify-between px-4 pb-4">
             <p className="text-[14px] font-semibold tracking-tight text-[#1d1d1f]">Zayneb's Workspace</p>
