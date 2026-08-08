@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Pencil, Upload, Move, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { Pencil, Upload, Move } from "lucide-react"
 import { TasksContent } from "@/components/sections/Tasks"
 
 function navigate(section: string) {
@@ -237,8 +237,6 @@ export default function ArchiveHome() {
   const [role, setRole] = useState(() => ld<string>(LS_ROLE, "Computer Science · Columbia University"))
   const [editRole, setEditRole] = useState(false)
 
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-
   const now = new Date()
   const dateStr = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
 
@@ -249,49 +247,36 @@ export default function ArchiveHome() {
       <div className="flex">
 
       {/* Left sidebar — sticky full height so it never scrolls away */}
-      <div className={`shrink-0 sticky top-0 h-screen overflow-y-auto flex flex-col gap-8 transition-all duration-300 ${sidebarOpen ? "w-[220px] px-6 pt-10 pb-8" : "w-10 pt-10 items-center"}`}>
+      <div className="w-[220px] shrink-0 px-6 pt-10 pb-8 flex flex-col gap-8 sticky top-0 h-screen overflow-y-auto">
 
-        {/* Toggle button */}
-        <button
-          onClick={() => setSidebarOpen(o => !o)}
-          className="shrink-0 text-[#c0c0c0] hover:text-[#5a5a5a] transition-colors"
-          title={sidebarOpen ? "Hide menu" : "Show menu"}
-        >
-          {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-        </button>
+        {/* User photo */}
+        <ImageUploadSlot
+          storageKey="workspace:home-user-photo"
+          aspect="1/1"
+          className="w-full !rounded-none"
+          placeholder={
+            <div className="flex flex-col items-center gap-2 text-[#c0c0c0]">
+              <Upload size={18} />
+              <span className="text-[10px]">Add photo</span>
+            </div>
+          }
+        />
 
-        {sidebarOpen && (
-          <>
-            {/* User photo */}
-            <ImageUploadSlot
-              storageKey="workspace:home-user-photo"
-              aspect="1/1"
-              className="w-full !rounded-none"
-              placeholder={
-                <div className="flex flex-col items-center gap-2 text-[#c0c0c0]">
-                  <Upload size={18} />
-                  <span className="text-[10px]">Add photo</span>
-                </div>
-              }
-            />
-
-            {/* Sidebar nav */}
-            <nav className="flex flex-col gap-0.5 border-r border-[#f0f0f0] pr-4">
-              {SECTIONS.map(s => (
-                <button
-                  key={s.num}
-                  onClick={s.scrollTo
-                    ? () => document.getElementById(s.scrollTo!)?.scrollIntoView({ behavior: "smooth" })
-                    : s.id ? () => navigate(s.id!) : undefined}
-                  className="flex items-center gap-3 py-1.5 group text-left"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#d0d0d0] group-hover:bg-[#1d1d1f] transition-colors shrink-0" />
-                  <span className="text-[12px] text-[#7a7a7a] group-hover:text-[#1d1d1f] transition-colors leading-tight">{s.label}</span>
-                </button>
-              ))}
-            </nav>
-          </>
-        )}
+        {/* Sidebar nav */}
+        <nav className="flex flex-col gap-0.5 border-r border-[#f0f0f0] pr-4">
+          {SECTIONS.map(s => (
+            <button
+              key={s.num}
+              onClick={s.scrollTo
+                ? () => document.getElementById(s.scrollTo!)?.scrollIntoView({ behavior: "smooth" })
+                : s.id ? () => navigate(s.id!) : undefined}
+              className="flex items-center gap-3 py-1.5 group text-left"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#d0d0d0] group-hover:bg-[#1d1d1f] transition-colors shrink-0" />
+              <span className="text-[12px] text-[#7a7a7a] group-hover:text-[#1d1d1f] transition-colors leading-tight">{s.label}</span>
+            </button>
+          ))}
+        </nav>
       </div>
 
       {/* Right column — sections grid only */}
