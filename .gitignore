@@ -19,6 +19,9 @@ agent/workspace/skills/pptx/*.txt
 node_modules/
 package.json
 package-lock.json
+# but allow the frontend's package files
+!frontend/package.json
+!frontend/package-lock.json
 
 # SF Pro fonts (large licensed files — serve locally, don't commit)
 **/*.otf
