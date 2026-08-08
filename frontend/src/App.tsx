@@ -75,6 +75,7 @@ export default function App() {
   const [section, setSection] = useState<Section>("archive-home")
   const [userName, setUserName] = useState("")
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarHovered, setSidebarHovered] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
   const synced = useRef(false)
 
@@ -123,44 +124,69 @@ export default function App() {
       <CommandPalette />
 
       {/* Sidebar */}
-      <aside className={`flex flex-col shrink-0 border-r pb-6 bg-white overflow-hidden transition-all duration-200 ${sidebarOpen ? "w-[220px] pt-4" : "w-12 pt-4 items-center"}`}>
-        {sidebarOpen ? (
-          <div className="flex items-center justify-between px-4 pb-4">
-            <p className="text-[14px] font-semibold tracking-tight text-[#1d1d1f]">Zayneb's Workspace</p>
-            <button onClick={() => setSidebarOpen(false)} className="text-[#c0c0c0] hover:text-[#5a5a5a] transition-colors">
-              <PanelLeftClose size={15} />
+      <div className="relative shrink-0 flex">
+        <aside className={`flex flex-col border-r pb-6 bg-white overflow-hidden transition-all duration-200 ${sidebarOpen ? "w-[220px] pt-4" : "w-12 pt-4 items-center"}`}
+          onMouseEnter={() => { if (!sidebarOpen) setSidebarHovered(true) }}
+          onMouseLeave={() => setSidebarHovered(false)}
+        >
+          {sidebarOpen ? (
+            <div className="flex items-center justify-between px-4 pb-4">
+              <p className="text-[14px] font-semibold tracking-tight text-[#1d1d1f]">Zayneb's Workspace</p>
+              <button onClick={() => setSidebarOpen(false)} className="text-[#c0c0c0] hover:text-[#5a5a5a] transition-colors">
+                <PanelLeftClose size={15} />
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setSidebarOpen(true)} className="mb-4 text-[#c0c0c0] hover:text-[#5a5a5a] transition-colors">
+              <PanelLeftOpen size={15} />
             </button>
-          </div>
-        ) : (
-          <button onClick={() => setSidebarOpen(true)} className="mb-4 text-[#c0c0c0] hover:text-[#5a5a5a] transition-colors">
-            <PanelLeftOpen size={15} />
-          </button>
-        )}
+          )}
 
-        {sidebarOpen && <div className="h-3" />}
+          {sidebarOpen && <div className="h-3" />}
 
-        {/* Nav */}
-        {sidebarOpen && (
-          <nav className="flex flex-col gap-0.5 px-1 flex-1">
+          {/* Nav */}
+          {sidebarOpen && (
+            <nav className="flex flex-col gap-0.5 px-1 flex-1">
+              {ARCHIVE_NAV.map(n => (
+                <NavButton key={n.id} {...n} active={section === n.id} onClick={() => setSection(n.id)} />
+              ))}
+            </nav>
+          )}
+
+          {sidebarOpen && (
+            <>
+              <Separator className="mb-4" />
+              <button
+                onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }))}
+                className="mx-3 flex items-center justify-between rounded-[8px] border border-[#e0e0e0] bg-white/60 px-3 py-2 text-[11px] text-[#7a7a7a] hover:bg-white hover:text-[#1d1d1f] transition-colors"
+              >
+                <span>Search & commands</span>
+                <kbd className="font-mono text-[10px] bg-[#f0f0f0] border border-[#e0e0e0] rounded px-1 py-0.5">⌘K</kbd>
+              </button>
+            </>
+          )}
+        </aside>
+
+        {/* Hover flyout when sidebar is collapsed */}
+        {!sidebarOpen && sidebarHovered && (
+          <div
+            className="absolute left-12 top-0 z-50 bg-white border border-[#f0f0f0] shadow-lg rounded-r-xl pt-10 pb-6 px-5 flex flex-col gap-0.5 min-w-[160px]"
+            onMouseEnter={() => setSidebarHovered(true)}
+            onMouseLeave={() => setSidebarHovered(false)}
+          >
             {ARCHIVE_NAV.map(n => (
-              <NavButton key={n.id} {...n} active={section === n.id} onClick={() => setSection(n.id)} />
+              <button
+                key={n.id}
+                onClick={() => { setSection(n.id); setSidebarHovered(false) }}
+                className="flex items-center gap-3 py-1.5 group/item text-left"
+              >
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${section === n.id ? "bg-[#1d1d1f]" : "bg-[#d0d0d0] group-hover/item:bg-[#1d1d1f]"}`} />
+                <span className={`text-[12px] leading-tight transition-colors ${section === n.id ? "text-[#1d1d1f] font-medium" : "text-[#7a7a7a] group-hover/item:text-[#1d1d1f]"}`}>{n.label}</span>
+              </button>
             ))}
-          </nav>
+          </div>
         )}
-
-        {sidebarOpen && (
-          <>
-            <Separator className="mb-4" />
-            <button
-              onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }))}
-              className="mx-3 flex items-center justify-between rounded-[8px] border border-[#e0e0e0] bg-white/60 px-3 py-2 text-[11px] text-[#7a7a7a] hover:bg-white hover:text-[#1d1d1f] transition-colors"
-            >
-              <span>Search & commands</span>
-              <kbd className="font-mono text-[10px] bg-[#f0f0f0] border border-[#e0e0e0] rounded px-1 py-0.5">⌘K</kbd>
-            </button>
-          </>
-        )}
-      </aside>
+      </div>
 
       {/* Main */}
       <main className="flex flex-col flex-1 min-w-0 overflow-hidden">
