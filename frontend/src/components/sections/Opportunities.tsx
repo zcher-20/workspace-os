@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react"
-import { Plus, X, Clock, Search, ExternalLink, Pencil, ChevronUp } from "lucide-react"
+import { Plus, X, Clock, Search, ExternalLink, Pencil, ChevronUp, CheckCircle2, Circle } from "lucide-react"
 
 type Status = "Exploring" | "Applying" | "Interview" | "Offer" | "Archived"
 const COLUMNS: Status[] = ["Exploring", "Applying", "Interview", "Offer", "Archived"]
@@ -19,7 +19,7 @@ const STATUS_STYLES: Record<Status, { bg: string; text: string; dot: string; bor
 
 interface Opportunity {
   id: string; title: string; organization: string; deadline: string
-  status: Status; notes: string; link: string; logo?: string; createdAt: string
+  status: Status; notes: string; link: string; logo?: string; done?: boolean; createdAt: string
 }
 
 const LS_KEY = "workspace:opportunities"
@@ -213,11 +213,12 @@ interface OppCardProps {
   isBeingDragged: boolean
   onExpand: () => void
   onRemove: (e: React.MouseEvent) => void
+  onToggleDone: (e: React.MouseEvent) => void
   onDragStart: (e: React.DragEvent) => void
   onDragEnd: () => void
 }
-function OppCard({ opp, isBeingDragged, onExpand, onRemove, onDragStart, onDragEnd }: OppCardProps) {
-  const overdue = isOverdue(opp.deadline)
+function OppCard({ opp, isBeingDragged, onExpand, onRemove, onToggleDone, onDragStart, onDragEnd }: OppCardProps) {
+  const overdue = isOverdue(opp.deadline) && !opp.done
   return (
     <div
       draggable
@@ -225,8 +226,9 @@ function OppCard({ opp, isBeingDragged, onExpand, onRemove, onDragStart, onDragE
       onDragEnd={onDragEnd}
       onClick={onExpand}
       className={[
-        "group bg-white rounded-2xl border border-[#e4e4e8] p-4 cursor-grab active:cursor-grabbing",
-        "hover:border-[#2c4470]/40 hover:shadow-md transition-all select-none",
+        "group bg-white rounded-2xl border p-4 cursor-grab active:cursor-grabbing",
+        "hover:shadow-md transition-all select-none",
+        opp.done ? "border-[#d0e8d8] opacity-60" : "border-[#e4e4e8] hover:border-[#2c4470]/40",
         isBeingDragged ? "opacity-30 scale-[0.97] shadow-none" : "",
       ].join(" ")}
     >
@@ -234,18 +236,32 @@ function OppCard({ opp, isBeingDragged, onExpand, onRemove, onDragStart, onDragE
         <OrgLogo opp={opp} size={34} />
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-1">
-            <p className="text-[14px] font-semibold text-[#1d1d1f] line-clamp-2 flex-1 leading-snug">{opp.title || <span className="text-[#c0c0c0] font-normal italic">Untitled</span>}</p>
-            <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
-              {opp.link && (
-                <a href={opp.link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                  className="p-0.5 text-[#a0a0a0] hover:text-[#2c4470] transition-colors">
-                  <ExternalLink size={12} />
-                </a>
-              )}
-              <button onClick={e => { e.stopPropagation(); onRemove(e) }}
-                className="p-0.5 text-[#a0a0a0] hover:text-[#1d1d1f] transition-colors">
-                <X size={12} />
+            <p className={`text-[14px] font-semibold line-clamp-2 flex-1 leading-snug ${opp.done ? "line-through text-[#9a9a9a]" : "text-[#1d1d1f]"}`}>
+              {opp.title || <span className="text-[#c0c0c0] font-normal italic">Untitled</span>}
+            </p>
+            <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
+              <button
+                onClick={e => { e.stopPropagation(); onToggleDone(e) }}
+                className="p-0.5 transition-colors"
+                title={opp.done ? "Mark undone" : "Mark done"}
+              >
+                {opp.done
+                  ? <CheckCircle2 size={14} className="text-[#5b9b6a]" />
+                  : <Circle size={14} className="text-[#d0d0d0] opacity-0 group-hover:opacity-100 transition-opacity hover:text-[#5b9b6a]" />
+                }
               </button>
+              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                {opp.link && (
+                  <a href={opp.link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                    className="p-0.5 text-[#a0a0a0] hover:text-[#2c4470] transition-colors">
+                    <ExternalLink size={12} />
+                  </a>
+                )}
+                <button onClick={e => { e.stopPropagation(); onRemove(e) }}
+                  className="p-0.5 text-[#a0a0a0] hover:text-[#1d1d1f] transition-colors">
+                  <X size={12} />
+                </button>
+              </div>
             </div>
           </div>
           {opp.organization && (
@@ -347,7 +363,7 @@ export default function Opportunities() {
       </div>
 
       {/* Kanban */}
-      <div className="flex gap-3 shrink-0 overflow-x-auto pb-4 [&::-webkit-scrollbar]:h-[3px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#d8d8d8] [&::-webkit-scrollbar-thumb]:rounded-full">
+      <div className="flex gap-3 shrink-0 overflow-x-auto pb-4 [&::-webkit-scrollbar]:h-0">
         {COLUMNS.map(col => {
           const isOver = dragOverCol === col && draggingId !== null
           return (
@@ -410,6 +426,7 @@ export default function Opportunities() {
                       isBeingDragged={draggingId === opp.id}
                       onExpand={() => setExpandedId(opp.id)}
                       onRemove={e => { e.stopPropagation(); removeItem(opp.id) }}
+                      onToggleDone={e => { e.stopPropagation(); updateItem(opp.id, { done: !opp.done }) }}
                       onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDraggingId(opp.id) }}
                       onDragEnd={() => { setDraggingId(null); setDragOverCol(null) }}
                     />
@@ -431,25 +448,18 @@ export default function Opportunities() {
       </div>
 
       {/* Notes panel */}
-      <div className="shrink-0 border-t border-[#f0f0f0] pt-5 pb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#2c4470]/30" />
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#a0a0a0]">Thoughts & Notes</p>
+      <div className="shrink-0 pt-10 pb-8">
+        <div className="flex items-baseline justify-between mb-5">
+          <h2 className="text-[18px] font-bold text-[#1d1d1f] tracking-tight">Notes</h2>
+          <span className="text-[11px] text-[#c0c0c0]">{pageNotes.length > 0 ? `${pageNotes.split(/\n/).length} line${pageNotes.split(/\n/).length !== 1 ? "s" : ""}` : "empty"}</span>
         </div>
-        <div className="relative">
-          <textarea
-            value={pageNotes}
-            onChange={e => { setPageNotes(e.target.value); localStorage.setItem("workspace:opp-notes", e.target.value) }}
-            placeholder="Jot down your thoughts on applications, what to prioritize, follow-ups…"
-            className="w-full h-32 resize-none bg-transparent outline-none text-[13px] text-[#1d1d1f] leading-[2] transition-colors placeholder:text-[#c8c8c8] border-none"
-            style={{
-              backgroundImage: "repeating-linear-gradient(transparent, transparent calc(2em - 1px), #f0f0f0 calc(2em - 1px), #f0f0f0 2em)",
-              backgroundSize: "100% 2em",
-              lineHeight: "2em",
-              paddingTop: "0.2em",
-            }}
-          />
-        </div>
+        <textarea
+          value={pageNotes}
+          onChange={e => { setPageNotes(e.target.value); localStorage.setItem("workspace:opp-notes", e.target.value) }}
+          placeholder="Write your thoughts — priorities, follow-ups, impressions…"
+          className="w-full resize-none bg-[#fafafa] rounded-2xl outline-none text-[14px] text-[#1d1d1f] leading-relaxed px-5 py-4 placeholder:text-[#d0d0d0] min-h-[140px] focus:bg-white transition-colors"
+          rows={6}
+        />
       </div>
 
       {/* Add modal */}

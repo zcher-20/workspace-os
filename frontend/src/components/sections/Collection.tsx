@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useCallback } from "react"
 import { Search, Plus, X, Upload, ImageIcon, FolderOpen, Pencil } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -128,6 +128,25 @@ export default function Collection() {
   const [newFolderName, setNewFolderName] = useState("")
   const [creatingFolder, setCreatingFolder] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [panelWidth, setPanelWidth] = useState(560)
+  const dividerDragRef = useRef<{ startX: number; startW: number } | null>(null)
+
+  const onDividerDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dividerDragRef.current = { startX: e.clientX, startW: panelWidth }
+    function onMove(ev: MouseEvent) {
+      if (!dividerDragRef.current) return
+      const delta = ev.clientX - dividerDragRef.current.startX
+      setPanelWidth(Math.max(280, Math.min(900, dividerDragRef.current.startW + delta)))
+    }
+    function onUp() {
+      dividerDragRef.current = null
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }, [panelWidth])
 
   function openEdit(item: ArchiveItem) {
     setEditingItem(item)
@@ -254,7 +273,12 @@ export default function Collection() {
     <div className="flex h-full w-full">
 
       {/* ── Left: Visual board ── */}
-      <div className="flex flex-col w-[560px] shrink-0 border-r border-[#e0e0e0] overflow-hidden">
+      <div className="flex flex-col shrink-0 border-r border-[#e0e0e0] overflow-hidden" style={{ width: panelWidth }}>
+
+        {/* Hero */}
+        <div className="px-5 pt-8 pb-6 shrink-0 text-center">
+          <h1 className="text-[22px] font-bold tracking-tight text-[#1d1d1f]">Collection</h1>
+        </div>
 
         {/* Toolbar */}
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#e0e0e0] bg-white shrink-0">
@@ -323,7 +347,7 @@ export default function Collection() {
         </div>
 
         {/* Masonry board */}
-        <div className="flex-1 overflow-y-auto bg-white">
+        <div className="flex-1 overflow-y-auto bg-white [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center text-[#7a7a7a] py-16 px-8">
               <p className="text-[13px] font-medium text-[#1d1d1f]">Nothing here yet</p>
@@ -361,6 +385,12 @@ export default function Collection() {
           <p className="text-[10px] text-[#c0c0c0]">{filtered.length} item{filtered.length !== 1 ? "s" : ""}</p>
         </div>
       </div>
+
+      {/* ── Resize divider ── */}
+      <div
+        onMouseDown={onDividerDown}
+        className="w-1 shrink-0 cursor-col-resize hover:bg-[#2c4470]/20 active:bg-[#2c4470]/30 transition-colors z-10"
+      />
 
       {/* ── Right: Atlas graph ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

@@ -111,6 +111,10 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
   const [enabledTypes,   setEnabledTypes]   = useState<Set<string> | null>(null)
   const [hovered,        setHovered]        = useState<string | null>(null)
   const [hoverCard,      setHoverCard]      = useState<HoverCard | null>(null)
+  const [editingCardId,  setEditingCardId]  = useState<string | null>(null)
+  const [editCardLabel,  setEditCardLabel]  = useState("")
+  const [editingCustomId, setEditingCustomId] = useState<string | null>(null)
+  const [editCustomLabel, setEditCustomLabel] = useState("")
   const [dragging,       setDragging]       = useState<{ kind: "auto" | "custom"; id: string; ox: number; oy: number } | null>(null)
   const [isPanning,      setIsPanning]      = useState(false)
   const [typeConfig,     setTypeConfig]     = useState<Record<string, TypeConfig>>(loadTypeConfig)
@@ -247,7 +251,7 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
     const rect = containerRef.current.getBoundingClientRect()
     setHoverCard({ node, screenX: e.clientX - rect.left, screenY: e.clientY - rect.top })
   }
-  function scheduleHide() { hideTimer.current = setTimeout(() => setHoverCard(null), 150) }
+  function scheduleHide() { hideTimer.current = setTimeout(() => setHoverCard(null), 300) }
   function cancelHide()   { clearTimeout(hideTimer.current) }
   function navigateTo(section: string) {
     window.dispatchEvent(new CustomEvent("workspace:navigate", { detail: section })); setHoverCard(null)
@@ -318,15 +322,24 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
               const isH = hovered === n.id
               const isDraggingThis = dragging?.id === n.id
               return (
-                <circle key={n.id} cx={n.x} cy={n.y}
-                  r={(isH ? 6 : 4) / zoom}
-                  fill={isDraggingThis && isOverTrash ? "#ef4444" : p.dot}
-                  fillOpacity={visible ? (isH ? 1 : 0.8) : 0.1}
-                  style={{ cursor: "grab", transition: "r 0.12s, fill-opacity 0.12s, fill 0.1s" }}
-                  onMouseEnter={e => { setHovered(n.id); showCard(n, e) }}
-                  onMouseLeave={() => { setHovered(null); scheduleHide() }}
-                  onMouseDown={e => onAutoNodeDown(e, n.id)}
-                />
+                <g key={n.id}>
+                  {/* Visible dot */}
+                  <circle cx={n.x} cy={n.y}
+                    r={(isH ? 6 : 4) / zoom}
+                    fill={isDraggingThis && isOverTrash ? "#ef4444" : p.dot}
+                    fillOpacity={visible ? (isH ? 1 : 0.8) : 0.1}
+                    style={{ transition: "r 0.12s, fill-opacity 0.12s, fill 0.1s", pointerEvents: "none" }}
+                  />
+                  {/* Larger transparent hit area */}
+                  <circle cx={n.x} cy={n.y}
+                    r={14 / zoom}
+                    fill="transparent"
+                    style={{ cursor: "grab" }}
+                    onMouseEnter={e => { setHovered(n.id); showCard(n, e) }}
+                    onMouseLeave={() => { setHovered(null); scheduleHide() }}
+                    onMouseDown={e => onAutoNodeDown(e, n.id)}
+                  />
+                </g>
               )
             })}
 
@@ -336,17 +349,24 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
               const isDraggingThis = dragging?.id === cn.id
               const willDelete = isDraggingThis && isOverTrash
               if (cn.kind === "title") {
+                const isEditingThis = editingCustomId === cn.id
                 return (
                   <text key={cn.id} x={cn.x} y={cn.y}
                     textAnchor="middle" dominantBaseline="middle"
                     fontSize={16 / zoom} fontWeight={700}
                     fill={willDelete ? "#ef4444" : cn.color}
+                    fillOpacity={isEditingThis ? 0 : 1}
                     style={{ cursor: "move", fontFamily: "SF Pro, system-ui, sans-serif",
                              filter: isH ? "drop-shadow(0 1px 4px rgba(0,0,0,0.15))" : "none",
                              transition: "fill 0.1s" }}
                     onMouseEnter={() => setHovered(cn.id)}
                     onMouseLeave={() => setHovered(null)}
                     onMouseDown={e => onCustomNodeDown(e, cn.id)}
+                    onDoubleClick={e => {
+                      e.stopPropagation()
+                      setEditingCustomId(cn.id)
+                      setEditCustomLabel(cn.label)
+                    }}
                   >
                     {cn.label}
                   </text>
@@ -382,9 +402,53 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
           </g>
         </svg>
 
+        {/* Inline edit overlay for title nodes */}
+        {editingCustomId && (() => {
+          const cn = customNodes.find(n => n.id === editingCustomId)
+          if (!cn || cn.kind !== "title") return null
+          const screenX = pan.x + cn.x * zoom
+          const screenY = pan.y + cn.y * zoom
+          return (
+            <input
+              autoFocus
+              value={editCustomLabel}
+              onChange={e => setEditCustomLabel(e.target.value)}
+              onBlur={() => {
+                const trimmed = editCustomLabel.trim()
+                if (trimmed) updateCN(editingCustomId, { label: trimmed })
+                setEditingCustomId(null)
+              }}
+              onKeyDown={e => {
+                if (e.key === "Enter")  e.currentTarget.blur()
+                if (e.key === "Escape") setEditingCustomId(null)
+              }}
+              style={{
+                position: "absolute",
+                left: screenX,
+                top: screenY,
+                transform: "translate(-50%, -50%)",
+                fontSize: `${16 * zoom}px`,
+                fontWeight: 700,
+                color: cn.color,
+                background: "transparent",
+                border: "none",
+                borderBottom: `1.5px solid ${cn.color}`,
+                outline: "none",
+                textAlign: "center",
+                minWidth: 60,
+                width: `${Math.max(60, (editCustomLabel.length + 2) * 10 * zoom)}px`,
+                fontFamily: "SF Pro, system-ui, sans-serif",
+                pointerEvents: "all",
+              }}
+            />
+          )
+        })()}
+
         {/* Hover card */}
         {hoverCard && (() => {
-          const { node: n, screenX, screenY } = hoverCard
+          const { node: hcNode, screenX, screenY } = hoverCard
+          // Always use the latest node data in case label was edited
+          const n = autoNodes.find(node => node.id === hcNode.id) ?? hcNode
           const p = getTypePal(n.type)
           const cardW = 200
           const cw = containerRef.current?.clientWidth ?? 700
@@ -393,6 +457,7 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
           const top  = Math.min(screenY - 10, ch - 110)
           const targetSection = TYPE_SECTION[n.type]
           const targetLabel   = TYPE_SECTION_LABEL[n.type]
+          const isEditing = editingCardId === n.id
           return (
             <div className="absolute z-30 pointer-events-auto"
               style={{ left, top, width: cardW }}
@@ -404,7 +469,32 @@ export default function Atlas({ items = [] }: { items?: AtlasItem[] }) {
                     style={{ background: p.fill, color: p.text, border: `1px solid ${p.stroke}` }}>
                     {getTypeLabel(n.type)}
                   </span>
-                  <p className="text-[13px] font-semibold text-[#1d1d1f] leading-snug">{n.label}</p>
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      value={editCardLabel}
+                      onChange={e => setEditCardLabel(e.target.value)}
+                      onBlur={() => {
+                        const trimmed = editCardLabel.trim()
+                        if (trimmed) setAutoNodes(ns => ns.map(nd => nd.id === n.id ? { ...nd, label: trimmed } : nd))
+                        setEditingCardId(null)
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === "Enter")  e.currentTarget.blur()
+                        if (e.key === "Escape") { setEditingCardId(null) }
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      className="w-full text-[13px] font-semibold text-[#1d1d1f] outline-none border-b border-[#c0c0c0] bg-transparent leading-snug pb-0.5"
+                    />
+                  ) : (
+                    <p
+                      className="text-[13px] font-semibold text-[#1d1d1f] leading-snug cursor-text hover:underline decoration-dotted underline-offset-2"
+                      onClick={() => { setEditingCardId(n.id); setEditCardLabel(n.label) }}
+                      title="Click to rename"
+                    >
+                      {n.label}
+                    </p>
+                  )}
                   {n.subtitle && <p className="text-[11px] text-[#7a7a7a] mt-0.5 line-clamp-2">{n.subtitle}</p>}
                   {targetSection && (
                     <button onClick={() => navigateTo(targetSection)}

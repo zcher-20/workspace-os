@@ -47,6 +47,7 @@ const LS_BLOCKS  = "workspace:canvas-v2"
 const LS_FOLDERS = "workspace:canvas-folders"
 const LS_STROKES = "workspace:canvas-strokes"
 const LS_CONNS   = "workspace:canvas-connections"
+const LS_PAN     = "workspace:canvas-pan"
 
 function ld<T>(key: string, def: T): T {
   try { return JSON.parse(localStorage.getItem(key) || "null") ?? def } catch { return def }
@@ -87,9 +88,9 @@ function TitleBlock({ block, editing, onEdit, onChange }: {
     <div className="select-none" style={{ minWidth: block.w ?? 160 }}>
       {editing
         ? <InlineText value={block.content ?? ""} onChange={v => onChange({ content: v })}
-            placeholder="Title…" className="text-[26px] font-black text-[#1d1d1f] leading-tight tracking-tight" />
-        : <p className="text-[26px] font-black text-[#1d1d1f] leading-tight tracking-tight cursor-text whitespace-nowrap" onClick={onEdit}>
-            {block.content || <span className="text-[#d0d0d0] font-normal text-[20px]">Title…</span>}
+            placeholder="Title…" className="text-[22px] font-bold text-[#1d1d1f] leading-tight tracking-tight" />
+        : <p className="text-[22px] font-bold text-[#1d1d1f] leading-tight tracking-tight cursor-text whitespace-nowrap" onClick={onEdit}>
+            {block.content || <span className="text-[#d0d0d0] font-normal text-[18px]">Title…</span>}
           </p>}
     </div>
   )
@@ -496,7 +497,8 @@ export default function Projects() {
   const [mode,           setMode]           = useState<CanvasMode>("select")
   const [arrowFrom,      setArrowFrom]      = useState<string | null>(null)
   const [zoom,           setZoom]           = useState(1)
-  const [pan,            setPan]            = useState({ x: 80, y: 60 })
+  const hasSavedPan = !!localStorage.getItem(LS_PAN)
+  const [pan,            setPan]            = useState<{ x: number; y: number }>(() => ld(LS_PAN, { x: 0, y: 0 }))
   const [isPanning,      setIsPanning]      = useState(false)
   const [isDrawing,      setIsDrawing]      = useState(false)
   const [liveStroke,     setLiveStroke]     = useState("")
@@ -512,7 +514,7 @@ export default function Projects() {
 
   const containerRef  = useRef<HTMLDivElement>(null)
   const panRef        = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null)
-  const dragRef       = useRef<{ id: string; ox: number; oy: number } | null>(null)
+  const dragRef       = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
   const dragPosRef    = useRef<{ x: number; y: number } | null>(null)
   const blockEls      = useRef<Map<string, HTMLDivElement>>(new Map())
   const resizeRef     = useRef<{ id: string; sx: number; sw: number; sy: number; sh: number } | null>(null)
@@ -520,6 +522,22 @@ export default function Projects() {
   const strokePts     = useRef<{ x: number; y: number }[]>([])
   const selStartRef   = useRef<{ x: number; y: number } | null>(null)
   const blocksRef     = useRef<Block[]>(blocks)
+
+  useEffect(() => {
+    if (hasSavedPan) return  // restore saved position
+    const el = containerRef.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    if (width <= 0 || height <= 0) return
+    const all = blocksRef.current
+    if (all.length === 0) {
+      setPan({ x: width / 2, y: height / 2 })
+    } else {
+      const cx = all.reduce((s, b) => s + b.x + (b.w ?? BDEF[b.type][0]) / 2, 0) / all.length
+      const cy = all.reduce((s, b) => s + b.y + (b.h ?? BDEF[b.type][1]) / 2, 0) / all.length
+      setPan({ x: width / 2 - cx * zoom, y: height / 2 - cy * zoom })
+    }
+  }, [])
 
   const visibleBlocks  = blocks.filter(b => (b.folderId ?? null) === currentFolderId)
   const visibleStrokes = strokes.filter(s => s.folderId === currentFolderId)
@@ -656,7 +674,34 @@ export default function Projects() {
 
     const pos = blocks.find(b => b.id === id)
     if (!pos) return
-    dragRef.current = { id, ox: e.clientX - pan.x - pos.x * zoom, oy: e.clientY - pan.y - pos.y * zoom }
+    dragRef.current = { id, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
+
+    // Use native window events to bypass React's synthetic event overhead during drag
+    const capturedZoom = zoom
+    function nativeDragMove(ev: MouseEvent) {
+      const drag = dragRef.current
+      if (!drag) return
+      const dx = (ev.clientX - drag.startX) / capturedZoom
+      const dy = (ev.clientY - drag.startY) / capturedZoom
+      dragPosRef.current = { x: drag.origX + dx, y: drag.origY + dy }
+      const el = blockEls.current.get(drag.id)
+      if (el) el.style.transform = `translate(${dx}px,${dy}px)`
+    }
+    function nativeDragEnd() {
+      window.removeEventListener("mousemove", nativeDragMove)
+      window.removeEventListener("mouseup", nativeDragEnd)
+      const drag = dragRef.current
+      const finalPos = dragPosRef.current
+      dragRef.current = null
+      dragPosRef.current = null
+      if (!drag || !finalPos) return
+      const el = blockEls.current.get(drag.id)
+      if (el) { el.style.left = `${finalPos.x}px`; el.style.top = `${finalPos.y}px`; el.style.transform = "" }
+      const next = blocksRef.current.map(b => b.id === drag.id ? { ...b, ...finalPos } : b)
+      setBlocks(next); blocksRef.current = next; sv(LS_BLOCKS, next)
+    }
+    window.addEventListener("mousemove", nativeDragMove)
+    window.addEventListener("mouseup", nativeDragEnd)
   }
   function onResizeDown(e: React.MouseEvent, block: Block) {
     e.stopPropagation()
@@ -702,15 +747,6 @@ export default function Projects() {
       patch(id, { h: Math.max(40, sh + (e.clientY - sy) / zoom) }, false)
       return
     }
-    if (dragRef.current) {
-      const { id, ox, oy } = dragRef.current
-      const newX = (e.clientX - pan.x - ox) / zoom
-      const newY = (e.clientY - pan.y - oy) / zoom
-      dragPosRef.current = { x: newX, y: newY }
-      const el = blockEls.current.get(id)
-      if (el) { el.style.left = `${newX}px`; el.style.top = `${newY}px` }
-      return
-    }
     if (panRef.current) {
       setPan({ x: panRef.current.px + (e.clientX - panRef.current.sx), y: panRef.current.py + (e.clientY - panRef.current.sy) })
     }
@@ -732,15 +768,11 @@ export default function Projects() {
       selStartRef.current = null
       setSelRect(null)
     }
-    if (dragRef.current && dragPosRef.current) {
-      const id = dragRef.current.id
-      const next = blocksRef.current.map(b => b.id === id ? { ...b, ...dragPosRef.current! } : b)
-      setBlocks(next); blocksRef.current = next; sv(LS_BLOCKS, next)
-      dragPosRef.current = null
-    } else if (resizeRef.current || resizeVRef.current) {
+    if (resizeRef.current || resizeVRef.current) {
       sv(LS_BLOCKS, blocksRef.current)
     }
-    dragRef.current = null; resizeRef.current = null; resizeVRef.current = null
+    resizeRef.current = null; resizeVRef.current = null
+    if (panRef.current) sv(LS_PAN, pan)
     panRef.current = null; setIsPanning(false)
   }
 
@@ -785,7 +817,7 @@ export default function Projects() {
       <div className="absolute top-12 right-3 z-20 flex flex-col gap-1">
         <button onClick={() => setZoom(z => Math.min(2.5, z + 0.2))} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><ZoomIn size={11} className="text-[#7a7a7a]" /></button>
         <button onClick={() => setZoom(z => Math.max(0.3, z - 0.2))} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><ZoomOut size={11} className="text-[#7a7a7a]" /></button>
-        <button onClick={() => { setZoom(1); setPan({ x: 80, y: 60 }) }} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><Maximize2 size={11} className="text-[#7a7a7a]" /></button>
+        <button onClick={() => { setZoom(1); localStorage.removeItem(LS_PAN); const el = containerRef.current; if (el) { const { width, height } = el.getBoundingClientRect(); const all = blocksRef.current; if (all.length === 0) { setPan({ x: width/2, y: height/2 }) } else { const cx = all.reduce((s,b)=>s+b.x+(b.w??BDEF[b.type][0])/2,0)/all.length; const cy = all.reduce((s,b)=>s+b.y+(b.h??BDEF[b.type][1])/2,0)/all.length; setPan({ x: width/2-cx, y: height/2-cy }) } } }} className="p-1.5 bg-white border border-[#e0e0e0] shadow-sm hover:bg-[#f5f5f7]"><Maximize2 size={11} className="text-[#7a7a7a]" /></button>
       </div>
 
       {/* Canvas */}

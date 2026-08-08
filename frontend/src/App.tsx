@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
-import { BarChart2, Mail, FileText, Cpu, MessageSquare, CalendarDays, Archive, UserRound, Briefcase, FolderOpen } from "lucide-react"
+import { BarChart2, Mail, FileText, Cpu, MessageSquare, CalendarDays, Archive, UserRound, Briefcase, FolderOpen, GraduationCap, CheckSquare } from "lucide-react"
 import Summary from "@/components/sections/Summary"
 import EmailInbox from "@/components/sections/EmailInbox"
 import Documents from "@/components/sections/Documents"
@@ -13,26 +13,30 @@ import Collection from "@/components/sections/Collection"
 import People from "@/components/sections/People"
 import Opportunities from "@/components/sections/Opportunities"
 import Projects from "@/components/sections/Projects"
+import Degree from "@/components/sections/Degree"
+import Tasks from "@/components/sections/Tasks"
+import ArchiveHome from "@/components/sections/ArchiveHome"
 import RightPanel from "@/components/RightPanel"
 import { CommandPalette } from "@/components/CommandPalette"
 import type { Section } from "@/types"
 
 const WORKSPACE_NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: "summary",  label: "Summary",      icon: <BarChart2 size={15} /> },
-  { id: "chat",     label: "Chat",         icon: <MessageSquare size={15} /> },
   { id: "email",    label: "Email Inbox",  icon: <Mail size={15} /> },
-  { id: "agents",   label: "Agents",       icon: <Cpu size={15} /> },
-  { id: "upload",   label: "Documents",    icon: <FileText size={15} /> },
+  { id: "chat",     label: "Chat",         icon: <MessageSquare size={15} /> },
 ]
 
 const ARCHIVE_NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
-  { id: "collection",    label: "Collection",    icon: <Archive size={15} /> },
-  { id: "projects",      label: "Projects",      icon: <FolderOpen size={15} /> },
-  { id: "opportunities", label: "Opportunities", icon: <Briefcase size={15} /> },
-  { id: "people",        label: "Network",       icon: <UserRound size={15} /> },
+  { id: "archive-home",  label: "Home",           icon: <BarChart2 size={15} /> },
+  { id: "collection",    label: "Collection",     icon: <Archive size={15} /> },
+  { id: "projects",      label: "Projects",       icon: <FolderOpen size={15} /> },
+  { id: "opportunities", label: "Opportunities",  icon: <Briefcase size={15} /> },
+  { id: "people",        label: "Network",        icon: <UserRound size={15} /> },
+  { id: "degree",        label: "Degree Planner", icon: <GraduationCap size={15} /> },
+  { id: "chat",          label: "Chat",           icon: <MessageSquare size={15} /> },
 ]
 
-const ARCHIVE_SECTIONS: Section[] = ["collection", "projects", "opportunities", "people"]
+const ARCHIVE_SECTIONS: Section[] = ["collection", "projects", "opportunities", "people", "degree", "archive-home", "tasks"]
 
 const PAGE_TITLES: Partial<Record<Section, string>> = {
   agents:        "AI Agents",
@@ -67,7 +71,7 @@ function NavButton({ id, label, icon, active, onClick }: { id: Section; label: s
 }
 
 export default function App() {
-  const [section, setSection] = useState<Section>("summary")
+  const [section, setSection] = useState<Section>("archive-home")
   const [userName, setUserName] = useState("")
 
   useEffect(() => {
@@ -91,7 +95,10 @@ export default function App() {
   const isCollection    = section === "collection"
   const isProjects      = section === "projects"
   const isOpportunities = section === "opportunities"
-  const isFullBleed     = isCollection || isProjects || isOpportunities
+  const isArchiveHome   = section === "archive-home"
+  const isDegree        = section === "degree"
+  const isTasks         = section === "tasks"
+  const isFullBleed     = isCollection || isProjects || isOpportunities || isArchiveHome || isDegree || isTasks
 
   const pageTitle = section === "summary"
     ? `${greeting()}${userName ? `, ${userName}` : ""}`
@@ -105,18 +112,9 @@ export default function App() {
       <aside className="flex flex-col w-[220px] shrink-0 border-r pt-4 pb-6 bg-[#f5f5f7] overflow-hidden">
         <p className="px-4 pb-4 text-[14px] font-semibold tracking-tight text-[#1d1d1f]">Zayneb's Workspace</p>
 
-        {/* Workspace group */}
-        <p className="px-4 pb-1 text-[14px] font-semibold tracking-tight text-[#7a7a7a]">Workspace</p>
-        <nav className="flex flex-col gap-0.5 px-1 mb-3">
-          {WORKSPACE_NAV.map(n => (
-            <NavButton key={n.id} {...n} active={section === n.id} onClick={() => setSection(n.id)} />
-          ))}
-        </nav>
+        <div className="h-3" />
 
-        <Separator className="mx-3 mb-3" />
-
-        {/* Archive group */}
-        <p className="px-4 pb-1 text-[14px] font-semibold tracking-tight text-[#7a7a7a]">Archive</p>
+        {/* Nav */}
         <nav className="flex flex-col gap-0.5 px-1 flex-1">
           {ARCHIVE_NAV.map(n => (
             <NavButton key={n.id} {...n} active={section === n.id} onClick={() => setSection(n.id)} />
@@ -135,7 +133,7 @@ export default function App() {
 
       {/* Main */}
       <main className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Page header — hidden for chat, collection, projects (full-bleed sections) */}
+        {/* Page header — hidden for chat and full-bleed sections (which have their own headers) */}
         {!isChat && !isFullBleed && (
           <div className="shrink-0 flex items-start justify-between px-8 pt-10 pb-8">
             <h1 className="text-[22px] font-bold tracking-tight leading-none">{pageTitle}</h1>
@@ -155,6 +153,21 @@ export default function App() {
             {isCollection    && <Collection />}
             {isProjects      && <Projects />}
             {isOpportunities && <Opportunities />}
+            {isArchiveHome   && (
+              <div className="flex-1 overflow-y-auto">
+                <ArchiveHome />
+              </div>
+            )}
+            {isDegree && (
+              <div className="flex-1 overflow-hidden">
+                <Degree />
+              </div>
+            )}
+            {isTasks && (
+              <div className="flex-1 overflow-hidden">
+                <Tasks />
+              </div>
+            )}
           </div>
         ) : (
           <ScrollArea className="flex-1">
@@ -164,7 +177,7 @@ export default function App() {
               {section === "agents"        && <Agents />}
               {section === "upload"        && <Documents />}
               {section === "people"        && <People />}
-              {/* Opportunities is full-bleed — rendered above */}
+              {/* degree, archive-home, collection, projects, opportunities are full-bleed — rendered above */}
               {/* EmailInbox stays mounted so it loads once */}
               <div className={section === "email" ? undefined : "hidden"}>
                 <EmailInbox />

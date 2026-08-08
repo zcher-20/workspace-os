@@ -10,7 +10,7 @@ interface Interaction { id: string; date: string; summary: string }
 
 interface Person {
   id: string; name: string; role: string; organization: string
-  email: string; linkedin?: string; needsFollowup: boolean; interactions: Interaction[]; createdAt: string
+  email: string; linkedin?: string; photo?: string; needsFollowup: boolean; interactions: Interaction[]; createdAt: string
 }
 
 interface Organization {
@@ -109,7 +109,64 @@ function avatarColor(id: string) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
-const ORG_TYPES = ["Company", "University", "Nonprofit", "Government", "Research Lab", "Startup", "Other"]
+function orgLogoSources(website: string): string[] {
+  try {
+    const host = new URL(website.startsWith("http") ? website : `https://${website}`).hostname
+    return [
+      `https://logo.clearbit.com/${host}`,
+      `https://www.google.com/s2/favicons?domain=${host}&sz=128`,
+    ]
+  } catch { return [] }
+}
+
+function OrgLogo({ org, size }: { org: Organization; size: number }) {
+  const [idx, setIdx] = useState(0)
+  const srcs = org.website ? orgLogoSources(org.website) : []
+  const style = { width: size, height: size, minWidth: size }
+  if (srcs.length > 0 && idx < srcs.length) {
+    return (
+      <img src={srcs[idx]} alt={org.name}
+        onError={() => setIdx(i => i + 1)}
+        className="rounded-lg object-contain bg-[#f5f5f7] shrink-0"
+        style={style} />
+    )
+  }
+  return (
+    <div className="rounded-lg bg-[#eef1fb] flex items-center justify-center shrink-0" style={style}>
+      <Building size={size * 0.45} className="text-[#2c4470]" />
+    </div>
+  )
+}
+
+function linkedinPhotoUrl(linkedinUrl: string): string | null {
+  try {
+    const match = linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/i)
+    if (!match) return null
+    return `https://unavatar.io/linkedin/${match[1]}`
+  } catch { return null }
+}
+
+function PersonAvatar({ person, size }: { person: Person; size: number }) {
+  const [photoOk, setPhotoOk] = useState(true)
+  const photoUrl = person.photo || (person.linkedin ? linkedinPhotoUrl(person.linkedin) : null)
+  const style = { width: size, height: size, minWidth: size }
+  if (photoUrl && photoOk) {
+    return (
+      <img src={photoUrl} alt={person.name}
+        onError={() => setPhotoOk(false)}
+        className="rounded-full object-cover shrink-0"
+        style={style} />
+    )
+  }
+  return (
+    <div className="rounded-full flex items-center justify-center font-bold text-white shrink-0"
+      style={{ ...style, background: avatarColor(person.id), fontSize: size * 0.38 }}>
+      {initials(person.name)}
+    </div>
+  )
+}
+
+const ORG_TYPES = ["Club", "Extracurricular", "Company", "University", "Nonprofit", "Government", "Research Lab", "Startup", "Other"]
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 const DAY_NAMES   = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -309,11 +366,12 @@ export default function People() {
 
   function addPerson() {
     if (!personDraft.name.trim()) return
+    const photo = personDraft.linkedin ? linkedinPhotoUrl(personDraft.linkedin) ?? undefined : undefined
     const p: Person = {
       id: Date.now().toString(), ...personDraft,
-      name: personDraft.name.trim(), needsFollowup: false, interactions: [], createdAt: new Date().toISOString(),
+      name: personDraft.name.trim(), photo, needsFollowup: false, interactions: [], createdAt: new Date().toISOString(),
     }
-    mutatePeople([p, ...people]); setAddingPerson(false); setPersonDraft({ name: "", role: "", organization: "", email: "" })
+    mutatePeople([p, ...people]); setAddingPerson(false); setPersonDraft({ name: "", role: "", organization: "", email: "", linkedin: "" })
   }
   function addOrg() {
     if (!orgDraft.name.trim()) return
@@ -373,7 +431,7 @@ export default function People() {
           <div className="relative flex-1">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#7a7a7a]" />
             <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder={tab === "people" ? "Search people…" : "Search orgs…"}
+              placeholder={tab === "people" ? "Search people…" : "Search organizations…"}
               className="w-full pl-7 pr-3 py-1.5 text-[12px] rounded-md border border-[#e0e0e0] bg-white focus:outline-none focus:ring-1 focus:ring-[#2c4470]/30" />
           </div>
           <button onClick={() => tab === "people" ? setAddingPerson(true) : setAddingOrg(true)}
@@ -398,13 +456,11 @@ export default function People() {
           {tab === "people" && filteredPeople.map(p => (
             <button key={p.id}
               onClick={() => { setSelectedPerson(p); setSelectedOrg(null) }}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left border transition-colors ${activePerson?.id === p.id ? "bg-white border-[#2c4470]/30 shadow-sm" : "bg-white/60 border-transparent hover:border-[#e0e0e0]"}`}>
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{ background: avatarColor(p.id) }}>
-                {initials(p.name)}
-              </div>
+              className={`flex items-center gap-3 px-3 py-3 rounded-xl text-left border transition-colors ${activePerson?.id === p.id ? "bg-white border-[#2c4470]/30 shadow-sm" : "bg-white/60 border-transparent hover:border-[#e0e0e0]"}`}>
+              <PersonAvatar person={p} size={36} />
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-medium text-[#1d1d1f] truncate">{p.name}</p>
-                <p className="text-[10px] text-[#7a7a7a] truncate">{p.role}{p.organization ? ` · ${p.organization}` : ""}</p>
+                <p className="text-[14px] font-medium text-[#1d1d1f] truncate">{p.name}</p>
+                <p className="text-[11px] text-[#7a7a7a] truncate">{p.role}{p.organization ? ` · ${p.organization}` : ""}</p>
                 {p.linkedin && (
                   <a href={p.linkedin} target="_blank" rel="noreferrer"
                     onClick={e => e.stopPropagation()}
@@ -416,19 +472,44 @@ export default function People() {
               {p.needsFollowup && <div className="w-1.5 h-1.5 rounded-full bg-[#c4856a] shrink-0" />}
             </button>
           ))}
-          {tab === "orgs" && filteredOrgs.map(o => (
-            <button key={o.id}
-              onClick={() => { setSelectedOrg(o); setSelectedPerson(null) }}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left border transition-colors ${activeOrg?.id === o.id ? "bg-white border-[#2c4470]/30 shadow-sm" : "bg-white/60 border-transparent hover:border-[#e0e0e0]"}`}>
-              <div className="w-7 h-7 rounded-lg bg-[#eef1fb] flex items-center justify-center shrink-0">
-                <Building size={13} className="text-[#2c4470]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-medium text-[#1d1d1f] truncate">{o.name}</p>
-                <p className="text-[10px] text-[#7a7a7a] truncate">{o.type}{o.location ? ` · ${o.location}` : ""}</p>
-              </div>
-            </button>
-          ))}
+          {tab === "orgs" && (() => {
+            const clubs  = filteredOrgs.filter(o => o.type === "Club")
+            const extras = filteredOrgs.filter(o => o.type === "Extracurricular")
+            const others = filteredOrgs.filter(o => o.type !== "Club" && o.type !== "Extracurricular")
+            const OrgItem = (o: Organization) => (
+              <button key={o.id}
+                onClick={() => { setSelectedOrg(o); setSelectedPerson(null) }}
+                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-left border transition-colors ${activeOrg?.id === o.id ? "bg-white border-[#2c4470]/30 shadow-sm" : "bg-white/60 border-transparent hover:border-[#e0e0e0]"}`}>
+                <OrgLogo org={o} size={36} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-medium text-[#1d1d1f] truncate">{o.name}</p>
+                  <p className="text-[11px] text-[#7a7a7a] truncate">{o.type}{o.location ? ` · ${o.location}` : ""}</p>
+                </div>
+              </button>
+            )
+            return (
+              <>
+                {clubs.length > 0 && (
+                  <>
+                    <p className="text-[10px] font-bold text-[#b0b0b0] uppercase tracking-widest px-1 pt-1">Clubs</p>
+                    {clubs.map(OrgItem)}
+                  </>
+                )}
+                {extras.length > 0 && (
+                  <>
+                    <p className="text-[10px] font-bold text-[#b0b0b0] uppercase tracking-widest px-1 pt-2">Extracurriculars</p>
+                    {extras.map(OrgItem)}
+                  </>
+                )}
+                {others.length > 0 && (
+                  <>
+                    <p className="text-[10px] font-bold text-[#b0b0b0] uppercase tracking-widest px-1 pt-2">Organizations</p>
+                    {others.map(OrgItem)}
+                  </>
+                )}
+              </>
+            )
+          })()}
           {((tab === "people" && filteredPeople.length === 0) || (tab === "orgs" && filteredOrgs.length === 0)) && (
             <p className="text-center py-8 text-[12px] text-[#b0b0b0]">
               {(tab === "people" ? people : orgs).length === 0 ? "None yet." : "No results."}
@@ -438,10 +519,10 @@ export default function People() {
       </div>
 
       {/* ── Right: calendar + detail ──────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-h-0 gap-0 overflow-hidden">
+      <div className="flex-1 flex flex-col gap-0">
 
         {/* Calendar */}
-        <div className="bg-white overflow-y-auto" style={{ maxHeight: showDetail ? "55%" : "100%" }}>
+        <div className="bg-white">
           <div className="px-5 pt-5 pb-3">
             <FullCalendar
               year={calYear} month={calMonth} events={calEvents} selected={selDay}
@@ -477,17 +558,14 @@ export default function People() {
 
         {/* Detail panel — person/org/day events */}
         {showDetail && (
-          <div className="flex-1 overflow-y-auto bg-white border-t border-[#f0f0f0]">
+          <div className="bg-white border-t border-[#f0f0f0] mt-4">
 
             {/* Person detail */}
             {activePerson && (
               <div className="px-5 py-5">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-bold text-white shrink-0"
-                      style={{ background: avatarColor(activePerson.id) }}>
-                      {initials(activePerson.name)}
-                    </div>
+                    <PersonAvatar person={activePerson} size={40} />
                     <div>
                       <h2 className="text-[15px] font-semibold text-[#1d1d1f]">{activePerson.name}</h2>
                       <p className="text-[12px] text-[#7a7a7a]">{activePerson.role}{activePerson.organization ? ` · ${activePerson.organization}` : ""}</p>
@@ -541,9 +619,7 @@ export default function People() {
               <div className="px-5 py-5">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-[#eef1fb] flex items-center justify-center">
-                      <Building size={18} className="text-[#2c4470]" />
-                    </div>
+                    <OrgLogo org={activeOrg} size={40} />
                     <div>
                       <h2 className="text-[15px] font-semibold text-[#1d1d1f]">{activeOrg.name}</h2>
                       <p className="text-[12px] text-[#7a7a7a]">{activeOrg.type}</p>
